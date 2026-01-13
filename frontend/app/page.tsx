@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthNav } from "./components/AuthNav";
 
 export default function HomePage() {
   return (
