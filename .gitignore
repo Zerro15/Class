@@ -6,3 +6,6 @@ __pycache__/
 .env
 dist/
 build/
+
+# local backups
+backups/
