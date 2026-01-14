@@ -5,12 +5,7 @@ import { useParams } from "next/navigation";
 
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-
-interface Student {
-  id: number;
-  name: string;
-  notes?: string | null;
-}
+import type { Student } from "@/lib/types";
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();

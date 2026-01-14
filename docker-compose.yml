@@ -40,6 +40,9 @@ services:
       context: ./frontend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      API_INTERNAL_URL: ${API_INTERNAL_URL}
+      NEXT_PUBLIC_ADMIN_EMAIL: ${NEXT_PUBLIC_ADMIN_EMAIL}
+      NEXT_PUBLIC_ADMIN_PASSWORD: ${NEXT_PUBLIC_ADMIN_PASSWORD}
     ports:
       - "3000:3000"
     depends_on:

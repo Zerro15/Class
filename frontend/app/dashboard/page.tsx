@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { Lesson } from "@/lib/api";
+import type { Lesson, LessonStatus } from "@/lib/types";
 
 import { Button } from "@/components/ui/button";
 
@@ -29,7 +29,7 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const updateStatus = async (lessonId: number, status: string) => {
+  const updateStatus = async (lessonId: number, status: LessonStatus) => {
     await api.updateLesson(lessonId, { status });
     await load();
   };
