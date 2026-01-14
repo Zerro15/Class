@@ -18,3 +18,8 @@ frontend/**/.cache/
 frontend/tsconfig.tsbuildinfo
 frontend/lib/*.bak.*
 classflow_debug_pack.tgz
+frontend/.env.local
+
+# local env
+.env.local
+frontend/.env.local

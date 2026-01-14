@@ -1,7 +1,11 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+
+export const API_URL = typeof window === "undefined" ? INTERNAL : PUBLIC;
 export const TOKEN_KEY = "classflow_token";
 
+
 export const tokenStorage = {
+  
   get(): string | null {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(TOKEN_KEY);

@@ -28,28 +28,6 @@ export default function LoginPage() {
     }
   };
 
-  const loginAsAdmin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "";
-      const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "";
-
-      if (!adminEmail || !adminPassword) {
-        throw new Error("Admin creds not set in .env.local");
-      }
-
-      const data = await api.login(adminEmail, adminPassword);
-      tokenStorage.set(data.access_token);
-      router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
   return (
     <div className="mx-auto max-w-md rounded-lg border bg-white p-6 shadow-sm">
       <h1 className="text-xl font-semibold">Вход</h1>
@@ -75,15 +53,9 @@ export default function LoginPage() {
           />
         </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        <div className="flex gap-2">
         <Button type="submit" disabled={loading}>
           {loading ? "Входим..." : "Войти"}
         </Button>
-
-        <Button type="button" variant="outline" onClick={loginAsAdmin} disabled={loading}>
-          Войти админом
-        </Button>
-      </div>
       </form>
     </div>
   );
