@@ -41,16 +41,8 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     throw new Error(payload || `HTTP ${res.status}`);
   }
 
-  // на случай 204/empty
   const text = await res.text();
   return (text ? (JSON.parse(text) as T) : ({} as T));
-}
-
-/** ===== Типы (под текущий фронт) ===== */
-export interface Student {
-  id: number;
-  name: string;
-  notes?: string | null;
 }
 
 export interface Lesson {
@@ -84,19 +76,6 @@ export type HomeworkUpdate = {
   sent_at?: string | null;
 };
 
-export type CreateStudentInput = {
-  name: string;
-  notes?: string | null;
-};
-
-export type CreateLessonInput = {
-  student_id: number;
-  start_at: string;
-  duration_min: number;
-  price: number;
-  topic?: string | null;
-};
-
 export const api = {
   login(email: string, password: string) {
     return request<{ access_token: string; token_type: string }>("/api/v1/auth/login", {
@@ -113,35 +92,13 @@ export const api = {
   },
 
   getUpcoming(days: number = 7) {
-    return request<{ items: Lesson[] }>(`/api/v1/dashboard/upcoming?days=${encodeURIComponent(days)}`, {
+    return request<{ items: Lesson[] }>(`/api/v1/dashboard/upcoming?days=${days}`, {
       method: "GET",
     });
   },
 
-  // ===== Students =====
-  listStudents() {
-    return request<{ items: Student[] }>("/api/v1/students", { method: "GET" });
-  },
-
-  createStudent(data: CreateStudentInput) {
-    return request<Student>("/api/v1/students", { method: "POST", json: data });
-  },
-
-  getStudent(studentId: string | number) {
-    return request<Student>(`/api/v1/students/${studentId}`, { method: "GET" });
-  },
-
-  // ===== Lessons =====
-  createLesson(data: CreateLessonInput) {
-    return request<Lesson>("/api/v1/lessons", { method: "POST", json: data });
-  },
-
-  requestLesson(lessonId: number) {
-    return request<Lesson>(`/api/v1/lessons/${lessonId}`, { method: "GET" });
-  },
-
   updateLesson(lessonId: number, data: LessonUpdate) {
-    return request<Lesson>(`/api/v1/lessons/${lessonId}`, {
+    return request(`/api/v1/lessons/${lessonId}`, {
       method: "PUT",
       json: data,
     });

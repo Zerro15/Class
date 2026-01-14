@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 interface Student {
   id: number;
   name: string;
-  notes: string | null;
+  notes?: string | null;
 }
 
 export default function StudentDetailPage() {

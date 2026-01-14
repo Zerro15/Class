@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import { api } from "@/lib/api";
+import type { Lesson } from "@/lib/api";
+
 import { Button } from "@/components/ui/button";
 
-interface Lesson {
-  id: number;
-  student_id: number;
-  start_at: string;
-  duration_min: number;
-  status: string;
-  topic?: string | null;
-  price: number;
-}
 
 export default function DashboardPage() {
   const [items, setItems] = useState<Lesson[]>([]);
@@ -25,7 +17,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       const data = await api.getUpcoming(7);
-      setItems(data.items as Lesson[]);
+      setItems(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     } finally {

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 interface Student {
   id: number;
   name: string;
-  notes: string | null;
+  notes?: string | null;
 }
 
 export default function StudentsPage() {
@@ -24,8 +24,8 @@ export default function StudentsPage() {
     setError(null);
     try {
       const data = await api.listStudents();
-      setStudents(data);
-    } catch (err) {
+      setStudents(data.items);
+} catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     } finally {
       setLoading(false);
