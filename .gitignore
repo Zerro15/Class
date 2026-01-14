@@ -17,3 +17,4 @@ frontend/.turbo/
 frontend/**/.cache/
 frontend/tsconfig.tsbuildinfo
 frontend/lib/*.bak.*
+classflow_debug_pack.tgz
