@@ -5,12 +5,7 @@ import Link from "next/link";
 
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-
-interface Student {
-  id: number;
-  name: string;
-  notes?: string | null;
-}
+import type { Student } from "@/lib/types";
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
