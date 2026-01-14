@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 
 import { api } from "@/lib/api";
@@ -19,24 +19,24 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await api.listStudents();
-      setStudents(data.items);
-} catch (err) {
+      setStudents(data.items as Student[]);
+    } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
-  const handleCreate = async (event: React.FormEvent) => {
+  const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     try {
@@ -83,9 +83,7 @@ export default function StudentsPage() {
             <li key={student.id} className="flex items-center justify-between">
               <div>
                 <p className="font-medium">{student.name}</p>
-                {student.notes ? (
-                  <p className="text-xs text-slate-500">{student.notes}</p>
-                ) : null}
+                {student.notes ? <p className="text-xs text-slate-500">{student.notes}</p> : null}
               </div>
               <Link className="text-sm text-slate-600 hover:text-slate-900" href={`/students/${student.id}`}>
                 Карточка

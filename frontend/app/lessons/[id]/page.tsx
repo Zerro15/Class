@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { api } from "@/lib/api";
@@ -17,25 +17,31 @@ interface Lesson {
 
 export default function LessonDetailPage() {
   const params = useParams<{ id: string }>();
+
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const [status, setStatus] = useState("scheduled");
   const [paidAmount, setPaidAmount] = useState(0);
   const [homeworkText, setHomeworkText] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setError(null);
     try {
       const data = await api.requestLesson(Number(params.id));
-      setLesson(data);
-      setStatus(data.status);
+      // если api типизирован как unknown — можно временно сделать:
+      // const data = (await api.requestLesson(Number(params.id))) as Lesson;
+
+      setLesson(data as Lesson);
+      setStatus((data as Lesson).status);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
-  };
+  }, [params.id]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const updateStatus = async () => {
     await api.updateLesson(Number(params.id), { status });
@@ -46,7 +52,7 @@ export default function LessonDetailPage() {
     await api.updatePayment(Number(params.id), {
       is_paid: true,
       paid_amount: paidAmount,
-      paid_at: new Date().toISOString()
+      paid_at: new Date().toISOString(),
     });
     await load();
   };
@@ -56,7 +62,7 @@ export default function LessonDetailPage() {
       text: homeworkText || null,
       link: null,
       is_sent: true,
-      sent_at: new Date().toISOString()
+      sent_at: new Date().toISOString(),
     });
     await load();
   };

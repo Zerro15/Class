@@ -42,7 +42,6 @@ export default function StudentDetailPage() {
         student_id: Number(params.id),
         start_at: new Date(startAt).toISOString(),
         duration_min: duration,
-        status: "scheduled",
         topic,
         price
       });

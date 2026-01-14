@@ -9,3 +9,11 @@ build/
 
 # local backups
 backups/
+
+# frontend build/cache
+frontend/.next/
+frontend/node_modules/
+frontend/.turbo/
+frontend/**/.cache/
+frontend/tsconfig.tsbuildinfo
+frontend/lib/*.bak.*
