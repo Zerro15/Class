@@ -188,8 +188,12 @@ def test_lessons_filter_range(client: TestClient) -> None:
     )
 
     response = client.get(
-        f"/api/v1/lessons?from={(now + timedelta(days=0)).isoformat()}&to={(now + timedelta(days=5)).isoformat()}",
+        "/api/v1/lessons",
         headers=auth_headers(token),
+        params={
+            "from": (now + timedelta(days=0)).isoformat(),
+            "to": (now + timedelta(days=5)).isoformat(),
+        },
     )
     assert response.status_code == 200
     assert len(response.json()) == 1

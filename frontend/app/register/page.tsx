@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { api, tokenStorage } from "@/lib/api";
+import { useAuth } from "@/app/components/AuthProvider";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const data = await api.register(email, password);
-      tokenStorage.set(data.access_token);
+      await login(data.access_token);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
