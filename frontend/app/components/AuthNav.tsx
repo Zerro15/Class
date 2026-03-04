@@ -1,26 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { tokenStorage } from "@/lib/api";
+import { useRouter } from "next/navigation";
+
+import { useAuth } from "@/app/components/AuthProvider";
 
 export function AuthNav() {
-  const [hasToken, setHasToken] = useState(false);
+  const router = useRouter();
+  const { isAuthenticated, loading, logout } = useAuth();
 
-  useEffect(() => {
-    setHasToken(Boolean(tokenStorage.get()));
-  }, []);
+  if (loading) {
+    return <span className="text-slate-400">...</span>;
+  }
 
-  if (!hasToken) {
-    return <Link href="/login" className="text-slate-600 hover:text-slate-900">Вход</Link>;
+  if (!isAuthenticated) {
+    return (
+      <Link href="/login" className="text-slate-600 hover:text-slate-900">
+        Вход
+      </Link>
+    );
   }
 
   return (
     <button
       className="text-slate-600 hover:text-slate-900"
       onClick={() => {
-        tokenStorage.clear();
-        window.location.href = "/login";
+        logout();
+        router.push("/login");
       }}
     >
       Выйти
