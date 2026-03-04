@@ -3,10 +3,12 @@
 import { AuthGuard } from "@/app/components/AuthGuard";
 import { AuthProvider } from "@/app/components/AuthProvider";
 import { AuthNav } from "@/app/components/AuthNav";
+import { ToastProvider } from "@/app/components/ToastProvider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
+      <ToastProvider>
       <div className="min-h-screen">
         <header className="border-b bg-white">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
@@ -28,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <AuthGuard>{children}</AuthGuard>
         </main>
       </div>
+      </ToastProvider>
     </AuthProvider>
   );
 }

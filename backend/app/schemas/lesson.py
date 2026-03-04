@@ -9,8 +9,10 @@ from app.schemas.payment import PaymentOut
 
 class LessonStatus(str, Enum):
     scheduled = "scheduled"
-    done = "done"
+    completed = "completed"
     canceled = "canceled"
+    rescheduled = "rescheduled"
+    no_show = "no_show"
 
 
 class LessonBase(BaseModel):
@@ -45,6 +47,12 @@ class LessonUpdate(BaseModel):
     topic: str | None = None
     notes: str | None = None
     price: float | None = Field(None, ge=0)
+
+
+class LessonReschedule(BaseModel):
+    new_start_at: datetime
+    reason: str | None = Field(default=None, max_length=500)
+    notify_student: bool = False
 
 
 class LessonOut(BaseModel):

@@ -7,12 +7,19 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import get_current_user, get_db
 from app.models.homework import Homework
 from app.models.lesson import Lesson
+from app.models.lesson_reschedule import LessonReschedule
 from app.models.payment import Payment
 from app.models.settings import Settings
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.homework import HomeworkCreate, HomeworkOut, HomeworkStatus, HomeworkUpdate
-from app.schemas.lesson import LessonCreate, LessonOut, LessonUpdate, LessonWithRelationsOut
+from app.schemas.lesson import (
+    LessonCreate,
+    LessonOut,
+    LessonReschedule as LessonReschedulePayload,
+    LessonUpdate,
+    LessonWithRelationsOut,
+)
 from app.schemas.payment import PaymentCreate, PaymentOut, PaymentStatus, PaymentUpdate
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
@@ -118,6 +125,32 @@ def update_lesson(
     return lesson
 
 
+@router.post("/{lesson_id}/reschedule", response_model=LessonWithRelationsOut)
+def reschedule_lesson(
+    lesson_id: int,
+    payload: LessonReschedulePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LessonWithRelationsOut:
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    old_start_at = lesson.start_at
+    lesson.start_at = payload.new_start_at
+    lesson.status = "rescheduled"
+    # Фиксируем перенос отдельной записью, чтобы в будущем строить аналитику.
+    db.add(
+        LessonReschedule(
+            lesson_id=lesson.id,
+            old_start_at=old_start_at,
+            new_start_at=payload.new_start_at,
+            reason=payload.reason,
+            notify_student=payload.notify_student,
+        )
+    )
+    db.commit()
+    db.refresh(lesson)
+    return lesson
+
+
 @router.delete("/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_lesson(
     lesson_id: int,
@@ -125,7 +158,6 @@ def delete_lesson(
     current_user: User = Depends(get_current_user),
 ) -> None:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
-    # Явно удаляем дочерние сущности: так безопаснее для разных БД/настроек FK.
     if lesson.homework:
         db.delete(lesson.homework)
     if lesson.payment:
@@ -150,7 +182,7 @@ def create_payment(
         amount=Decimal(payload.amount),
         status=PaymentStatus.unpaid.value,
         is_paid=False,
-        paid_amount=float(payload.amount),
+        paid_amount=0.0,
     )
     db.add(payment)
     db.commit()
@@ -172,16 +204,29 @@ def update_payment(
         db.add(payment)
     if payload.amount is not None:
         payment.amount = Decimal(payload.amount)
-    if payload.status is not None:
-        payment.status = payload.status.value
-        payment.is_paid = payload.status is PaymentStatus.paid
-    if payload.is_paid is not None:
-        payment.is_paid = payload.is_paid
-        payment.status = PaymentStatus.paid.value if payload.is_paid else PaymentStatus.unpaid.value
     if payload.paid_amount is not None:
         payment.paid_amount = payload.paid_amount
     if payload.paid_at is not None:
         payment.paid_at = payload.paid_at
+
+    if payload.status is not None:
+        payment.status = payload.status.value
+    if payload.is_paid is not None:
+        payment.is_paid = payload.is_paid
+
+    # Единая логика статуса оплаты: unpaid/partial/paid.
+    target = float(payment.amount or 0)
+    paid = float(payment.paid_amount or 0)
+    if paid <= 0:
+        payment.status = PaymentStatus.unpaid.value
+        payment.is_paid = False
+    elif paid < target:
+        payment.status = PaymentStatus.partial.value
+        payment.is_paid = False
+    else:
+        payment.status = PaymentStatus.paid.value
+        payment.is_paid = True
+
     db.commit()
     db.refresh(payment)
     return payment
@@ -196,12 +241,13 @@ def mark_payment_paid(
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     payment = lesson.payment
     if not payment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+        # Если оплата ещё не создана, берём сумму из цены урока.
+        payment = Payment(lesson_id=lesson.id, amount=Decimal(lesson.price))
+        db.add(payment)
+    payment.paid_amount = float(payment.amount or lesson.price)
     payment.status = PaymentStatus.paid.value
     payment.is_paid = True
     payment.paid_at = datetime.now(timezone.utc)
-    if payment.paid_amount == 0:
-        payment.paid_amount = float(payment.amount)
     db.commit()
     db.refresh(payment)
     return payment
@@ -220,7 +266,7 @@ def create_homework(
     homework = Homework(
         lesson_id=lesson.id,
         text=payload.text,
-        status=HomeworkStatus.todo.value,
+        status=HomeworkStatus.assigned.value,
         is_sent=False,
     )
     db.add(homework)
@@ -239,7 +285,7 @@ def update_homework(
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     homework = lesson.homework
     if not homework:
-        homework = Homework(lesson_id=lesson.id)
+        homework = Homework(lesson_id=lesson.id, status=HomeworkStatus.assigned.value)
         db.add(homework)
     if payload.text is not None:
         homework.text = payload.text
@@ -247,12 +293,14 @@ def update_homework(
         homework.link = payload.link
     if payload.status is not None:
         homework.status = payload.status.value
-        homework.is_sent = payload.status is HomeworkStatus.done
     if payload.is_sent is not None:
         homework.is_sent = payload.is_sent
-        homework.status = HomeworkStatus.done.value if payload.is_sent else HomeworkStatus.todo.value
     if payload.sent_at is not None:
         homework.sent_at = payload.sent_at
+
+    # Синхронизируем legacy-флаг с новым статусом.
+    homework.is_sent = homework.status in {HomeworkStatus.submitted.value, HomeworkStatus.reviewed.value}
+
     db.commit()
     db.refresh(homework)
     return homework
@@ -268,7 +316,7 @@ def mark_homework_done(
     homework = lesson.homework
     if not homework:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Homework not found")
-    homework.status = HomeworkStatus.done.value
+    homework.status = HomeworkStatus.reviewed.value
     homework.is_sent = True
     homework.sent_at = datetime.now(timezone.utc)
     db.commit()

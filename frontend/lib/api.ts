@@ -7,9 +7,9 @@ export interface User {
   email: string;
 }
 
-export type LessonStatus = "scheduled" | "done" | "canceled";
-export type HomeworkStatus = "todo" | "done";
-export type PaymentStatus = "unpaid" | "paid";
+export type LessonStatus = "scheduled" | "completed" | "canceled" | "rescheduled" | "no_show";
+export type HomeworkStatus = "assigned" | "submitted" | "reviewed";
+export type PaymentStatus = "unpaid" | "partial" | "paid";
 
 export interface Homework {
   id: number;
@@ -23,8 +23,26 @@ export interface Payment {
   id: number;
   lesson_id: number;
   amount: number;
+  paid_amount: number;
   status: PaymentStatus;
   paid_at: string | null;
+}
+
+export interface PaymentTransaction {
+  id: number;
+  student_id: number;
+  lesson_id: number | null;
+  amount: number;
+  method: string;
+  comment: string | null;
+  paid_at: string;
+}
+
+export interface StudentBalance {
+  student_id: number;
+  total_price: number;
+  total_paid: number;
+  balance: number;
 }
 
 export interface Lesson {
@@ -118,6 +136,9 @@ export const api = {
   getStudent(studentId: string | number) {
     return request<Student>(`/api/v1/students/${studentId}`);
   },
+  getStudentBalance(studentId: string | number) {
+    return request<StudentBalance>(`/api/v1/students/${studentId}/balance`);
+  },
   createStudent(payload: { name: string; notes: string | null }) {
     return request<Student>("/api/v1/students", {
       method: "POST",
@@ -163,6 +184,15 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+  rescheduleLesson(
+    lessonId: number,
+    payload: { new_start_at: string; reason?: string; notify_student: boolean },
+  ) {
+    return request<Lesson>(`/api/v1/lessons/${lessonId}/reschedule`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   deleteLesson(lessonId: number) {
     return request<void>(`/api/v1/lessons/${lessonId}`, { method: "DELETE" });
   },
@@ -172,7 +202,43 @@ export const api = {
   markPaymentPaid(lessonId: number) {
     return request<Payment>(`/api/v1/lessons/${lessonId}/payment/paid`, { method: "POST" });
   },
+  createPaymentTransaction(payload: {
+    student_id: number;
+    lesson_id?: number;
+    amount: number;
+    method: string;
+    comment?: string;
+  }) {
+    return request<PaymentTransaction>("/api/v1/payments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   getUpcoming(days = 7) {
     return request<{ items: Lesson[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
+  getHistory(limit = 20, status?: LessonStatus) {
+    const query = status ? `limit=${limit}&status=${status}` : `limit=${limit}`;
+    return request<{ items: Lesson[] }>(`/api/v1/dashboard/history?${query}`);
+  },
+};
+
+export const lessonStatusLabel: Record<LessonStatus, string> = {
+  scheduled: "Запланирован",
+  completed: "Проведён",
+  canceled: "Отменён",
+  rescheduled: "Перенесён",
+  no_show: "Неявка",
+};
+
+export const homeworkStatusLabel: Record<HomeworkStatus, string> = {
+  assigned: "Задано",
+  submitted: "Отправлено",
+  reviewed: "Проверено",
+};
+
+export const paymentStatusLabel: Record<PaymentStatus, string> = {
+  unpaid: "Не оплачено",
+  partial: "Частично",
+  paid: "Оплачено",
 };

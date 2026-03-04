@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -5,9 +6,11 @@ from app.api.deps import get_current_user, get_db
 from app.models.homework import Homework
 from app.models.lesson import Lesson
 from app.models.payment import Payment
+from app.models.payment_transaction import PaymentTransaction
 from app.models.settings import Settings
 from app.models.student import Student
 from app.models.user import User
+from app.schemas.finance import StudentBalanceOut
 from app.schemas.homework import HomeworkStatus
 from app.schemas.lesson import LessonWithRelationsOut, StudentLessonCreate
 from app.schemas.payment import PaymentStatus
@@ -60,6 +63,38 @@ def get_student(
     current_user: User = Depends(get_current_user),
 ) -> StudentOut:
     return _get_student_or_404(db, student_id, current_user.id)
+
+
+@router.get("/{student_id}/balance", response_model=StudentBalanceOut)
+def get_student_balance(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StudentBalanceOut:
+    _get_student_or_404(db, student_id, current_user.id)
+    total_price = (
+        db.query(func.coalesce(func.sum(Lesson.price), 0.0))
+        .filter(
+            Lesson.owner_id == current_user.id,
+            Lesson.student_id == student_id,
+            Lesson.status != "canceled",
+        )
+        .scalar()
+    )
+    total_paid = (
+        db.query(func.coalesce(func.sum(PaymentTransaction.amount), 0.0))
+        .filter(
+            PaymentTransaction.owner_id == current_user.id,
+            PaymentTransaction.student_id == student_id,
+        )
+        .scalar()
+    )
+    return StudentBalanceOut(
+        student_id=student_id,
+        total_price=float(total_price or 0),
+        total_paid=float(total_paid or 0),
+        balance=float(total_price or 0) - float(total_paid or 0),
+    )
 
 
 @router.patch("/{student_id}", response_model=StudentOut)
@@ -137,7 +172,7 @@ def create_student_lesson(
             Homework(
                 lesson_id=lesson.id,
                 text=payload.homework_text,
-                status=HomeworkStatus.todo.value,
+                status=HomeworkStatus.assigned.value,
                 is_sent=False,
             )
         )
@@ -149,7 +184,7 @@ def create_student_lesson(
                 amount=payload.payment_amount,
                 status=PaymentStatus.unpaid.value,
                 is_paid=False,
-                paid_amount=float(payload.payment_amount),
+                paid_amount=0,
             )
         )
 

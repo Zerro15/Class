@@ -5,14 +5,15 @@ from pydantic import BaseModel, Field
 
 
 class HomeworkStatus(str, Enum):
-    todo = "todo"
-    done = "done"
+    assigned = "assigned"
+    submitted = "submitted"
+    reviewed = "reviewed"
 
 
 class HomeworkBase(BaseModel):
     text: str | None = None
     link: str | None = None
-    status: HomeworkStatus = HomeworkStatus.todo
+    status: HomeworkStatus = HomeworkStatus.assigned
     is_sent: bool = False
     sent_at: datetime | None = None
 

@@ -28,3 +28,5 @@ class Lesson(Base):
     student = relationship("Student", back_populates="lessons")
     payment = relationship("Payment", back_populates="lesson", uselist=False)
     homework = relationship("Homework", back_populates="lesson", uselist=False)
+    # История переносов помогает понять, почему дата занятия изменилась.
+    reschedules = relationship("LessonReschedule", back_populates="lesson", cascade="all, delete")

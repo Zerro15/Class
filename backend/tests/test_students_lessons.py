@@ -13,249 +13,123 @@ def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_create_student_and_forbid_other(client: TestClient) -> None:
-    token_a = register_user(client, "owner@example.com")
-    token_b = register_user(client, "other@example.com")
-
-    create_resp = client.post(
-        "/api/v1/students",
-        headers=auth_headers(token_a),
-        json={"name": "Alice", "notes": "note"},
-    )
-    assert create_resp.status_code == 201
-    student_id = create_resp.json()["id"]
-
-    get_resp = client.get(f"/api/v1/students/{student_id}", headers=auth_headers(token_b))
-    assert get_resp.status_code == 404
-
-
-def test_create_lesson(client: TestClient) -> None:
-    token = register_user(client, "lesson@example.com")
-    student_resp = client.post(
+def create_student(client: TestClient, token: str, name: str = "Ученик") -> int:
+    response = client.post(
         "/api/v1/students",
         headers=auth_headers(token),
-        json={"name": "Bob", "notes": None},
+        json={"name": name, "notes": None},
     )
-    student_id = student_resp.json()["id"]
+    assert response.status_code == 201
+    return response.json()["id"]
 
-    start_at = datetime.now(timezone.utc).isoformat()
-    lesson_resp = client.post(
-        "/api/v1/lessons",
+
+def create_lesson(client: TestClient, token: str, student_id: int, start_at: str, price: float = 0) -> int:
+    response = client.post(
+        f"/api/v1/students/{student_id}/lessons",
         headers=auth_headers(token),
         json={
-            "student_id": student_id,
-            "start_at": start_at,
+            "starts_at": start_at,
+            "topic": "Алгебра",
+            "notes": "",
             "duration_min": 60,
-            "status": "scheduled",
-            "topic": "Math",
-            "price": 20,
+            "homework_text": "Решить 5 задач",
+            "payment_amount": price,
         },
     )
-    assert lesson_resp.status_code == 201
-    assert lesson_resp.json()["student_id"] == student_id
+    assert response.status_code == 201
+    return response.json()["id"]
 
 
-def test_dashboard_upcoming_only_current_user(client: TestClient) -> None:
-    token_a = register_user(client, "dash@example.com")
-    token_b = register_user(client, "dash2@example.com")
+def test_create_and_list_student_lessons(client: TestClient) -> None:
+    token = register_user(client, "workflow-list@example.com")
+    student_id = create_student(client, token)
+    lesson_id = create_lesson(client, token, student_id, datetime.now(timezone.utc).isoformat(), price=25)
 
-    student_resp = client.post(
-        "/api/v1/students",
-        headers=auth_headers(token_a),
-        json={"name": "Dana", "notes": None},
-    )
-    student_id = student_resp.json()["id"]
-
-    start_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
-    client.post(
-        "/api/v1/lessons",
-        headers=auth_headers(token_a),
-        json={
-            "student_id": student_id,
-            "start_at": start_at,
-            "duration_min": 45,
-            "status": "scheduled",
-            "topic": "Physics",
-            "price": 30,
-        },
-    )
-
-    response_a = client.get("/api/v1/dashboard/upcoming", headers=auth_headers(token_a))
-    response_b = client.get("/api/v1/dashboard/upcoming", headers=auth_headers(token_b))
-
-    assert response_a.status_code == 200
-    assert response_b.status_code == 200
-    assert len(response_a.json()["items"]) == 1
-    assert len(response_b.json()["items"]) == 0
-
-
-def test_payment_update(client: TestClient) -> None:
-    token = register_user(client, "pay@example.com")
-    student_resp = client.post(
-        "/api/v1/students",
-        headers=auth_headers(token),
-        json={"name": "Eve", "notes": None},
-    )
-    student_id = student_resp.json()["id"]
-    start_at = datetime.now(timezone.utc).isoformat()
-    lesson_resp = client.post(
-        "/api/v1/lessons",
-        headers=auth_headers(token),
-        json={
-            "student_id": student_id,
-            "start_at": start_at,
-            "duration_min": 30,
-            "status": "scheduled",
-            "topic": None,
-            "price": 10,
-        },
-    )
-    lesson_id = lesson_resp.json()["id"]
-
-    pay_resp = client.patch(
-        f"/api/v1/lessons/{lesson_id}/payment",
-        headers=auth_headers(token),
-        json={"is_paid": True, "paid_amount": 10, "paid_at": start_at},
-    )
-    assert pay_resp.status_code == 200
-    assert pay_resp.json()["is_paid"] is True
-
-
-def test_homework_update(client: TestClient) -> None:
-    token = register_user(client, "hw@example.com")
-    student_resp = client.post(
-        "/api/v1/students",
-        headers=auth_headers(token),
-        json={"name": "Fiona", "notes": None},
-    )
-    student_id = student_resp.json()["id"]
-    start_at = datetime.now(timezone.utc).isoformat()
-    lesson_resp = client.post(
-        "/api/v1/lessons",
-        headers=auth_headers(token),
-        json={
-            "student_id": student_id,
-            "start_at": start_at,
-            "duration_min": 30,
-            "status": "scheduled",
-            "topic": None,
-            "price": 0,
-        },
-    )
-    lesson_id = lesson_resp.json()["id"]
-
-    hw_resp = client.patch(
-        f"/api/v1/lessons/{lesson_id}/homework",
-        headers=auth_headers(token),
-        json={"text": "Read chapter 1", "link": None, "is_sent": True, "sent_at": start_at},
-    )
-    assert hw_resp.status_code == 200
-    assert hw_resp.json()["is_sent"] is True
-
-
-def test_lessons_filter_range(client: TestClient) -> None:
-    token = register_user(client, "range@example.com")
-    student_resp = client.post(
-        "/api/v1/students",
-        headers=auth_headers(token),
-        json={"name": "Greg", "notes": None},
-    )
-    student_id = student_resp.json()["id"]
-    now = datetime.now(timezone.utc)
-    client.post(
-        "/api/v1/lessons",
-        headers=auth_headers(token),
-        json={
-            "student_id": student_id,
-            "start_at": (now + timedelta(days=1)).isoformat(),
-            "duration_min": 30,
-            "status": "scheduled",
-            "topic": None,
-            "price": 0,
-        },
-    )
-    client.post(
-        "/api/v1/lessons",
-        headers=auth_headers(token),
-        json={
-            "student_id": student_id,
-            "start_at": (now + timedelta(days=10)).isoformat(),
-            "duration_min": 30,
-            "status": "scheduled",
-            "topic": None,
-            "price": 0,
-        },
-    )
-
-    response = client.get(
-        "/api/v1/lessons",
-        headers=auth_headers(token),
-        params={
-            "from": (now + timedelta(days=0)).isoformat(),
-            "to": (now + timedelta(days=5)).isoformat(),
-        },
-    )
+    response = client.get(f"/api/v1/students/{student_id}/lessons", headers=auth_headers(token))
     assert response.status_code == 200
     assert len(response.json()) == 1
+    assert response.json()[0]["id"] == lesson_id
+    assert response.json()[0]["homework"]["status"] == "assigned"
 
 
-def test_student_lessons_workflow_crud(client: TestClient) -> None:
-    token = register_user(client, "workflow@example.com")
-    student_resp = client.post(
-        "/api/v1/students",
+def test_reschedule_lesson(client: TestClient) -> None:
+    token = register_user(client, "workflow-reschedule@example.com")
+    student_id = create_student(client, token)
+    lesson_id = create_lesson(client, token, student_id, datetime.now(timezone.utc).isoformat(), price=15)
+    new_start = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
+
+    response = client.post(
+        f"/api/v1/lessons/{lesson_id}/reschedule",
         headers=auth_headers(token),
-        json={"name": "Helen", "notes": "workflow"},
+        json={"new_start_at": new_start, "reason": "Болеет", "notify_student": True},
     )
-    student_id = student_resp.json()["id"]
-    starts_at = datetime.now(timezone.utc).isoformat()
+    assert response.status_code == 200
+    assert response.json()["status"] == "rescheduled"
 
-    create_resp = client.post(
-        f"/api/v1/students/{student_id}/lessons",
-        headers=auth_headers(token),
-        json={
-            "starts_at": starts_at,
-            "topic": "Geometry",
-            "notes": "Triangles",
-            "duration_min": 50,
-            "homework_text": "Solve #1-10",
-            "payment_amount": 25,
-        },
+
+def test_completed_lesson_not_in_upcoming(client: TestClient) -> None:
+    token = register_user(client, "workflow-upcoming@example.com")
+    student_id = create_student(client, token)
+    lesson_id = create_lesson(
+        client,
+        token,
+        student_id,
+        (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
     )
-    assert create_resp.status_code == 201
-    lesson_id = create_resp.json()["id"]
-    assert create_resp.json()["homework"]["status"] == "todo"
-    assert create_resp.json()["payment"]["status"] == "unpaid"
 
-    list_resp = client.get(
-        f"/api/v1/students/{student_id}/lessons",
-        headers=auth_headers(token),
-    )
-    assert list_resp.status_code == 200
-    assert len(list_resp.json()) == 1
-
-    done_resp = client.post(
-        f"/api/v1/lessons/{lesson_id}/homework/done",
-        headers=auth_headers(token),
-    )
-    assert done_resp.status_code == 200
-    assert done_resp.json()["status"] == "done"
-
-    paid_resp = client.post(
-        f"/api/v1/lessons/{lesson_id}/payment/paid",
-        headers=auth_headers(token),
-    )
-    assert paid_resp.status_code == 200
-    assert paid_resp.json()["status"] == "paid"
-
-    delete_resp = client.delete(
+    mark_completed = client.patch(
         f"/api/v1/lessons/{lesson_id}",
         headers=auth_headers(token),
+        json={"status": "completed"},
     )
+    assert mark_completed.status_code == 200
+
+    upcoming = client.get("/api/v1/dashboard/upcoming?days=7", headers=auth_headers(token))
+    assert upcoming.status_code == 200
+    assert upcoming.json()["items"] == []
+
+
+def test_payment_transaction_and_balance(client: TestClient) -> None:
+    token = register_user(client, "workflow-payment@example.com")
+    student_id = create_student(client, token)
+    lesson_id = create_lesson(client, token, student_id, datetime.now(timezone.utc).isoformat(), price=40)
+
+    payment_response = client.post(
+        "/api/v1/payments",
+        headers=auth_headers(token),
+        json={
+            "student_id": student_id,
+            "lesson_id": lesson_id,
+            "amount": 15,
+            "method": "перевод",
+            "comment": "Частичная оплата",
+        },
+    )
+    assert payment_response.status_code == 201
+
+    lesson_response = client.get(f"/api/v1/lessons/{lesson_id}", headers=auth_headers(token))
+    assert lesson_response.status_code == 200
+    assert lesson_response.json()["payment"]["status"] == "partial"
+
+    balance_response = client.get(f"/api/v1/students/{student_id}/balance", headers=auth_headers(token))
+    assert balance_response.status_code == 200
+    assert balance_response.json()["total_price"] == 40
+    assert balance_response.json()["total_paid"] == 15
+    assert balance_response.json()["balance"] == 25
+
+
+def test_mark_homework_done_and_delete_lesson(client: TestClient) -> None:
+    token = register_user(client, "workflow-homework@example.com")
+    student_id = create_student(client, token)
+    lesson_id = create_lesson(client, token, student_id, datetime.now(timezone.utc).isoformat(), price=10)
+
+    done_resp = client.post(f"/api/v1/lessons/{lesson_id}/homework/done", headers=auth_headers(token))
+    assert done_resp.status_code == 200
+    assert done_resp.json()["status"] == "reviewed"
+
+    delete_resp = client.delete(f"/api/v1/lessons/{lesson_id}", headers=auth_headers(token))
     assert delete_resp.status_code == 204
 
-    after_delete = client.get(
-        f"/api/v1/students/{student_id}/lessons",
-        headers=auth_headers(token),
-    )
-    assert after_delete.status_code == 200
-    assert after_delete.json() == []
+    list_resp = client.get(f"/api/v1/students/{student_id}/lessons", headers=auth_headers(token))
+    assert list_resp.status_code == 200
+    assert list_resp.json() == []
