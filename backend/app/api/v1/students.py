@@ -1,8 +1,11 @@
-from sqlalchemy import func
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import get_settings
 from app.models.homework import Homework
 from app.models.lesson import Lesson
 from app.models.payment import Payment
@@ -19,17 +22,27 @@ from app.schemas.student import StudentCreate, StudentOut, StudentUpdate
 router = APIRouter(prefix="/students", tags=["students"])
 
 
+def _charged_statuses() -> list[str]:
+    statuses = ["completed"]
+    if get_settings().charge_on_no_show:
+        statuses.append("no_show")
+    return statuses
+
+
 @router.get("", response_model=list[StudentOut])
 def list_students(
+    q: str | None = Query(None),
+    include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[StudentOut]:
-    return (
-        db.query(Student)
-        .filter(Student.owner_id == current_user.id)
-        .order_by(Student.created_at.desc())
-        .all()
-    )
+    query = db.query(Student).filter(Student.owner_id == current_user.id)
+    if not include_inactive:
+        query = query.filter(Student.is_active.is_(True))
+    if q:
+        pattern = f"%{q.strip()}%"
+        query = query.filter(or_(Student.name.ilike(pattern), Student.notes.ilike(pattern)))
+    return query.order_by(Student.created_at.desc()).all()
 
 
 @router.post("", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
@@ -38,7 +51,12 @@ def create_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StudentOut:
-    student = Student(owner_id=current_user.id, name=payload.name, notes=payload.notes)
+    student = Student(
+        owner_id=current_user.id,
+        name=payload.name,
+        notes=payload.notes,
+        price_per_hour=payload.price_per_hour,
+    )
     db.add(student)
     db.commit()
     db.refresh(student)
@@ -72,16 +90,16 @@ def get_student_balance(
     current_user: User = Depends(get_current_user),
 ) -> StudentBalanceOut:
     _get_student_or_404(db, student_id, current_user.id)
-    total_price = (
+    charged_total = (
         db.query(func.coalesce(func.sum(Lesson.price), 0.0))
         .filter(
             Lesson.owner_id == current_user.id,
             Lesson.student_id == student_id,
-            Lesson.status != "canceled",
+            Lesson.status.in_(_charged_statuses()),
         )
         .scalar()
     )
-    total_paid = (
+    paid_total = (
         db.query(func.coalesce(func.sum(PaymentTransaction.amount), 0.0))
         .filter(
             PaymentTransaction.owner_id == current_user.id,
@@ -91,9 +109,9 @@ def get_student_balance(
     )
     return StudentBalanceOut(
         student_id=student_id,
-        total_price=float(total_price or 0),
-        total_paid=float(total_paid or 0),
-        balance=float(total_price or 0) - float(total_paid or 0),
+        charged_total=float(charged_total or 0),
+        paid_total=float(paid_total or 0),
+        debt=float(charged_total or 0) - float(paid_total or 0),
     )
 
 
@@ -109,6 +127,8 @@ def update_student(
         student.name = payload.name
     if payload.notes is not None:
         student.notes = payload.notes
+    if payload.price_per_hour is not None:
+        student.price_per_hour = payload.price_per_hour
     db.commit()
     db.refresh(student)
     return student
@@ -121,9 +141,24 @@ def delete_student(
     current_user: User = Depends(get_current_user),
 ) -> None:
     student = _get_student_or_404(db, student_id, current_user.id)
-    db.delete(student)
+    student.is_active = False
+    student.deleted_at = datetime.now(timezone.utc)
     db.commit()
     return None
+
+
+@router.post("/{student_id}/restore", response_model=StudentOut)
+def restore_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StudentOut:
+    student = _get_student_or_404(db, student_id, current_user.id)
+    student.is_active = True
+    student.deleted_at = None
+    db.commit()
+    db.refresh(student)
+    return student
 
 
 @router.get("/{student_id}/lessons", response_model=list[LessonWithRelationsOut])
@@ -149,9 +184,15 @@ def create_student_lesson(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LessonWithRelationsOut:
-    _get_student_or_404(db, student_id, current_user.id)
+    student = _get_student_or_404(db, student_id, current_user.id)
     settings = db.query(Settings).filter(Settings.owner_id == current_user.id).first()
     tax_percent = settings.tax_percent_default if settings else 0.0
+
+    # Если цена явно не передана, считаем от ставки ученика и длительности.
+    lesson_price = float(payload.payment_amount) if payload.payment_amount is not None else round(
+        student.price_per_hour * payload.duration_min / 60,
+        2,
+    )
 
     lesson = Lesson(
         owner_id=current_user.id,
@@ -162,7 +203,7 @@ def create_student_lesson(
         topic=payload.topic,
         notes=payload.notes,
         tax_percent=tax_percent,
-        price=float(payload.payment_amount or 0),
+        price=lesson_price,
     )
     db.add(lesson)
     db.flush()
@@ -177,16 +218,15 @@ def create_student_lesson(
             )
         )
 
-    if payload.payment_amount is not None:
-        db.add(
-            Payment(
-                lesson_id=lesson.id,
-                amount=payload.payment_amount,
-                status=PaymentStatus.unpaid.value,
-                is_paid=False,
-                paid_amount=0,
-            )
+    db.add(
+        Payment(
+            lesson_id=lesson.id,
+            amount=lesson_price,
+            status=PaymentStatus.unpaid.value,
+            is_paid=False,
+            paid_amount=0,
         )
+    )
 
     db.commit()
     return (

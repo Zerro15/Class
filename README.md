@@ -1,29 +1,21 @@
 # ClassFlow MVP
 
-ClassFlow — планировщик репетитора: ученики, занятия, переносы, домашка, оплаты, баланс и дашборд.
+ClassFlow — планировщик репетитора: ученики, уроки, переносы, домашка, оплаты и финансы.
 
-## Что теперь умеет репетитор
-- Вести занятия со статусами: **Запланирован / Перенесён / Проведён / Отменён / Неявка**.
-- Переносить занятие с причиной и флагом «уведомить ученика».
-- Вести домашку со статусами: **Задано / Отправлено / Проверено**.
-- Вносить оплаты транзакциями и видеть баланс ученика (начислено / оплачено / долг).
-- Смотреть ближайшие занятия и историю с фильтрами.
+## Возможности для репетитора
+- Статусы уроков: **Запланирован / Перенесён / Проведён / Отменён / Неявка**.
+- Статусы оплаты: **Не оплачено / Частично / Оплачено**.
+- Баланс ученика: **Начислено / Оплачено / Долг**.
+- Дашборд с карточками: предстоящие, сегодня, неоплаченная сумма.
+- Финансы: доходы за месяц, неоплаченные уроки, таблица платежей.
 
-## Структура репозитория
-```
-backend/    FastAPI + SQLAlchemy + Alembic
-frontend/   Next.js 14 (App Router) + TypeScript + Tailwind
-infra/      инфраструктурные заметки
-docs/       спецификация и API
-```
-
-## Быстрый старт через Docker Compose
+## Запуск через Docker
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-После запуска:
+Откройте:
 - Frontend: http://localhost:3000
 - Backend docs: http://localhost:8000/docs
 
@@ -35,7 +27,7 @@ pip install -r backend/requirements.txt
 pytest -q backend/tests
 ```
 
-Также поддерживается запуск из `backend/`:
+Также работает запуск из папки `backend`:
 ```bash
 cd backend && pytest -q
 ```
@@ -49,21 +41,25 @@ pnpm build
 ```
 
 ## Рекомендуемый workflow
-Запускайте backend тесты из корня репозитория:
+1. Из корня репозитория запускать backend тесты:
 ```bash
 pytest -q backend/tests
 ```
+2. Перед коммитом проверить frontend:
+```bash
+cd frontend && pnpm lint && pnpm build
+```
 
 ## Переменные окружения
-`.env` в корне:
-- `DATABASE_URL` — подключение к Postgres
-- `JWT_SECRET` — JWT секрет
-- `FRONTEND_ORIGIN` — CORS origin фронтенда
-- `TAX_PERCENT_DEFAULT` — комиссия/налог по умолчанию
-- `NEXT_PUBLIC_API_URL` — URL backend для frontend
-- `LOGIN_RATE_LIMIT_ATTEMPTS` — лимит неудачных логинов
-- `LOGIN_RATE_LIMIT_WINDOW_SECONDS` — окно лимита логинов
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `FRONTEND_ORIGIN`
+- `TAX_PERCENT_DEFAULT`
+- `NEXT_PUBLIC_API_URL`
+- `LOGIN_RATE_LIMIT_ATTEMPTS`
+- `LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+- `CHARGE_ON_NO_SHOW` — учитывать ли неявку в начислениях (по умолчанию `false`)
 
-## Полезные ссылки
-- [API](docs/API.md)
-- [SPEC](docs/SPEC.md)
+## Документация
+- [docs/API.md](docs/API.md)
+- [docs/SPEC.md](docs/SPEC.md)

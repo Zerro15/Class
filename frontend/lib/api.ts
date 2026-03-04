@@ -28,23 +28,6 @@ export interface Payment {
   paid_at: string | null;
 }
 
-export interface PaymentTransaction {
-  id: number;
-  student_id: number;
-  lesson_id: number | null;
-  amount: number;
-  method: string;
-  comment: string | null;
-  paid_at: string;
-}
-
-export interface StudentBalance {
-  student_id: number;
-  total_price: number;
-  total_paid: number;
-  balance: number;
-}
-
 export interface Lesson {
   id: number;
   student_id: number;
@@ -63,6 +46,38 @@ export interface Student {
   id: number;
   name: string;
   notes: string | null;
+  price_per_hour: number;
+  is_active: boolean;
+}
+
+export interface StudentBalance {
+  student_id: number;
+  charged_total: number;
+  paid_total: number;
+  debt: number;
+}
+
+export interface DashboardSummary {
+  upcoming_count: number;
+  today_count: number;
+  unpaid_total: number;
+}
+
+export interface PaymentTransaction {
+  id: number;
+  student_id: number;
+  student_name: string | null;
+  lesson_id: number | null;
+  amount: number;
+  method: string;
+  comment: string | null;
+  paid_at: string;
+}
+
+export interface FinanceSummary {
+  income_month: number;
+  unpaid_total: number;
+  payments: PaymentTransaction[];
 }
 
 export class UnauthorizedError extends Error {
@@ -130,20 +145,29 @@ export const api = {
   me() {
     return request<User>("/api/v1/auth/me");
   },
-  listStudents() {
-    return request<Student[]>("/api/v1/students");
+  listStudents(params?: { q?: string; include_inactive?: boolean }) {
+    const q = new URLSearchParams();
+    if (params?.q) q.set("q", params.q);
+    if (params?.include_inactive) q.set("include_inactive", "true");
+    return request<Student[]>(`/api/v1/students${q.toString() ? `?${q.toString()}` : ""}`);
   },
   getStudent(studentId: string | number) {
     return request<Student>(`/api/v1/students/${studentId}`);
   },
+  restoreStudent(studentId: string | number) {
+    return request<Student>(`/api/v1/students/${studentId}/restore`, { method: "POST" });
+  },
   getStudentBalance(studentId: string | number) {
     return request<StudentBalance>(`/api/v1/students/${studentId}/balance`);
   },
-  createStudent(payload: { name: string; notes: string | null }) {
+  createStudent(payload: { name: string; notes: string | null; price_per_hour: number }) {
     return request<Student>("/api/v1/students", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+  deleteStudent(studentId: string | number) {
+    return request<void>(`/api/v1/students/${studentId}`, { method: "DELETE" });
   },
   listStudentLessons(studentId: string | number) {
     return request<Lesson[]>(`/api/v1/students/${studentId}/lessons`);
@@ -167,27 +191,13 @@ export const api = {
   requestLesson(lessonId: number) {
     return request<Lesson>(`/api/v1/lessons/${lessonId}`);
   },
-  updateLesson(
-    lessonId: number,
-    payload: Partial<{
-      starts_at: string;
-      start_at: string;
-      duration_min: number;
-      status: LessonStatus;
-      topic: string | null;
-      notes: string | null;
-      price: number;
-    }>,
-  ) {
+  updateLesson(lessonId: number, payload: Record<string, unknown>) {
     return request<Lesson>(`/api/v1/lessons/${lessonId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
-  rescheduleLesson(
-    lessonId: number,
-    payload: { new_start_at: string; reason?: string; notify_student: boolean },
-  ) {
+  rescheduleLesson(lessonId: number, payload: { new_start_at: string; reason?: string; notify_student: boolean }) {
     return request<Lesson>(`/api/v1/lessons/${lessonId}/reschedule`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -217,9 +227,15 @@ export const api = {
   getUpcoming(days = 7) {
     return request<{ items: Lesson[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
+  getDashboardSummary() {
+    return request<DashboardSummary>("/api/v1/dashboard/summary");
+  },
   getHistory(limit = 20, status?: LessonStatus) {
     const query = status ? `limit=${limit}&status=${status}` : `limit=${limit}`;
     return request<{ items: Lesson[] }>(`/api/v1/dashboard/history?${query}`);
+  },
+  getFinanceSummary(month?: string) {
+    return request<FinanceSummary>(`/api/v1/finance/summary${month ? `?month=${month}` : ""}`);
   },
 };
 
