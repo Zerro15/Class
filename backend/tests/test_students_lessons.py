@@ -188,8 +188,74 @@ def test_lessons_filter_range(client: TestClient) -> None:
     )
 
     response = client.get(
-        f"/api/v1/lessons?from={(now + timedelta(days=0)).isoformat()}&to={(now + timedelta(days=5)).isoformat()}",
+        "/api/v1/lessons",
         headers=auth_headers(token),
+        params={
+            "from": (now + timedelta(days=0)).isoformat(),
+            "to": (now + timedelta(days=5)).isoformat(),
+        },
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_student_lessons_workflow_crud(client: TestClient) -> None:
+    token = register_user(client, "workflow@example.com")
+    student_resp = client.post(
+        "/api/v1/students",
+        headers=auth_headers(token),
+        json={"name": "Helen", "notes": "workflow"},
+    )
+    student_id = student_resp.json()["id"]
+    starts_at = datetime.now(timezone.utc).isoformat()
+
+    create_resp = client.post(
+        f"/api/v1/students/{student_id}/lessons",
+        headers=auth_headers(token),
+        json={
+            "starts_at": starts_at,
+            "topic": "Geometry",
+            "notes": "Triangles",
+            "duration_min": 50,
+            "homework_text": "Solve #1-10",
+            "payment_amount": 25,
+        },
+    )
+    assert create_resp.status_code == 201
+    lesson_id = create_resp.json()["id"]
+    assert create_resp.json()["homework"]["status"] == "todo"
+    assert create_resp.json()["payment"]["status"] == "unpaid"
+
+    list_resp = client.get(
+        f"/api/v1/students/{student_id}/lessons",
+        headers=auth_headers(token),
+    )
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) == 1
+
+    done_resp = client.post(
+        f"/api/v1/lessons/{lesson_id}/homework/done",
+        headers=auth_headers(token),
+    )
+    assert done_resp.status_code == 200
+    assert done_resp.json()["status"] == "done"
+
+    paid_resp = client.post(
+        f"/api/v1/lessons/{lesson_id}/payment/paid",
+        headers=auth_headers(token),
+    )
+    assert paid_resp.status_code == 200
+    assert paid_resp.json()["status"] == "paid"
+
+    delete_resp = client.delete(
+        f"/api/v1/lessons/{lesson_id}",
+        headers=auth_headers(token),
+    )
+    assert delete_resp.status_code == 204
+
+    after_delete = client.get(
+        f"/api/v1/students/{student_id}/lessons",
+        headers=auth_headers(token),
+    )
+    assert after_delete.status_code == 200
+    assert after_delete.json() == []

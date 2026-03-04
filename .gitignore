@@ -1,11 +1,16 @@
-.vscode/
-**/.vscode/
-node_modules/
-__pycache__/
-*.pyc
+# --- Env / secrets ---
 .env
-dist/
-build/
+.env.*
 
-# local backups
-backups/
+# --- Python ---
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node / Next ---
+frontend/node_modules/
+frontend/.next/
+**/*.tsbuildinfo
