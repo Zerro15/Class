@@ -15,6 +15,8 @@ interface Lesson {
   price: number;
 }
 
+type LessonStatus = "scheduled" | "done" | "canceled";
+
 export default function DashboardPage() {
   const [items, setItems] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const updateStatus = async (lessonId: number, status: string) => {
+  const updateStatus = async (lessonId: number, status: LessonStatus) => {
     await api.updateLesson(lessonId, { status });
     await load();
   };

@@ -15,11 +15,13 @@ interface Lesson {
   price: number;
 }
 
+type LessonStatus = "scheduled" | "done" | "canceled";
+
 export default function LessonDetailPage() {
   const params = useParams<{ id: string }>();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("scheduled");
+  const [status, setStatus] = useState<LessonStatus>("scheduled");
   const [paidAmount, setPaidAmount] = useState(0);
   const [homeworkText, setHomeworkText] = useState("");
 
@@ -27,7 +29,7 @@ export default function LessonDetailPage() {
     try {
       const data = await api.requestLesson(Number(params.id));
       setLesson(data);
-      setStatus(data.status);
+      setStatus(data.status as LessonStatus);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
@@ -81,7 +83,7 @@ export default function LessonDetailPage() {
           <select
             className="rounded border px-3 py-2"
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => setStatus(event.target.value as LessonStatus)}
           >
             <option value="scheduled">Запланировано</option>
             <option value="done">Проведено</option>

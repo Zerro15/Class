@@ -1,11 +1,25 @@
-.vscode/
-**/.vscode/
-node_modules/
-__pycache__/
-*.pyc
-.env
-dist/
-build/
+# --- Python ---
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# local backups
-backups/
+# --- Node / Next ---
+frontend/node_modules/
+frontend/.next/
+**/*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- OS / IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Env / secrets ---
+.env
+.env.*
