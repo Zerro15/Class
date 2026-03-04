@@ -13,7 +13,11 @@ interface Lesson {
   status: string;
   topic?: string | null;
   price: number;
+  homework?: { status: "todo" | "done" } | null;
+  payment?: { status: "unpaid" | "paid" } | null;
 }
+
+type LessonStatus = "scheduled" | "done" | "canceled";
 
 export default function DashboardPage() {
   const [items, setItems] = useState<Lesson[]>([]);
@@ -37,27 +41,18 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const updateStatus = async (lessonId: number, status: string) => {
+  const updateStatus = async (lessonId: number, status: LessonStatus) => {
     await api.updateLesson(lessonId, { status });
     await load();
   };
 
   const markPaid = async (lessonId: number) => {
-    await api.updatePayment(lessonId, {
-      is_paid: true,
-      paid_amount: 0,
-      paid_at: new Date().toISOString()
-    });
+    await api.markPaymentPaid(lessonId);
     await load();
   };
 
   const markHomeworkSent = async (lessonId: number) => {
-    await api.updateHomework(lessonId, {
-      text: null,
-      link: null,
-      is_sent: true,
-      sent_at: new Date().toISOString()
-    });
+    await api.markHomeworkDone(lessonId);
     await load();
   };
 
@@ -95,10 +90,10 @@ export default function DashboardPage() {
                 >
                   Отменено
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => markPaid(lesson.id)}>
+                <Button size="sm" variant="outline" onClick={() => markPaid(lesson.id)} disabled={lesson.payment?.status === "paid"}>
                   Оплачено
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => markHomeworkSent(lesson.id)}>
+                <Button size="sm" variant="outline" onClick={() => markHomeworkSent(lesson.id)} disabled={lesson.homework?.status === "done"}>
                   Домашка отправлена
                 </Button>
               </div>

@@ -10,8 +10,7 @@ infra/      инфраструктурные заметки
 docs/       спецификация и краткое API
 ```
 
-## Быстрый старт
-
+## Быстрый старт через Docker Compose
 1. Скопируйте пример переменных окружения:
    ```bash
    cp .env.example .env
@@ -25,6 +24,33 @@ docs/       спецификация и краткое API
 - Backend: http://localhost:8000/docs
 - Frontend: http://localhost:3000
 
+## Рекомендуемый локальный workflow
+Запускайте тесты бэкенда из корня репозитория:
+```bash
+pytest -q backend/tests
+```
+
+Также поддерживается запуск из папки `backend/`:
+```bash
+cd backend && pytest -q
+```
+
+## Локальная разработка backend
+```bash
+python3 -m venv backend/.venv
+source backend/.venv/bin/activate
+pip install -r backend/requirements.txt
+pytest -q backend/tests
+```
+
+## Локальная разработка frontend
+```bash
+cd frontend
+pnpm install
+pnpm lint
+pnpm build
+```
+
 ## Переменные окружения
 `.env` в корне:
 - `DATABASE_URL` — строка подключения к Postgres
@@ -32,19 +58,6 @@ docs/       спецификация и краткое API
 - `FRONTEND_ORIGIN` — origin фронтенда (CORS)
 - `TAX_PERCENT_DEFAULT` — налог/комиссия по умолчанию
 - `NEXT_PUBLIC_API_URL` — URL backend для фронтенда
-
-## Команды
-Backend (в контейнере `backend`):
-- `pytest` — тесты
-- `ruff check .` — линтер
-- `mypy app` — typecheck
-
-Frontend:
-- `npm run lint`
-- `npm run typecheck`
-
-## Почему так
-- Для MVP токен хранится в `localStorage` (проще и быстрее в реализации). В production можно заменить на httpOnly cookie.
 
 ## Документация
 - [SPEC](docs/SPEC.md)
