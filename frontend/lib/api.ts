@@ -2,6 +2,91 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const TOKEN_KEY = "classflow_token";
 
+export interface User {
+  id: number;
+  email: string;
+}
+
+export type LessonStatus = "scheduled" | "completed" | "canceled" | "rescheduled" | "no_show";
+export type HomeworkStatus = "assigned" | "submitted" | "reviewed";
+export type PaymentStatus = "unpaid" | "partial" | "paid";
+
+export interface Homework {
+  id: number;
+  lesson_id: number;
+  text: string | null;
+  status: HomeworkStatus;
+  updated_at: string | null;
+}
+
+export interface Payment {
+  id: number;
+  lesson_id: number;
+  amount: number;
+  paid_amount: number;
+  status: PaymentStatus;
+  paid_at: string | null;
+}
+
+export interface Lesson {
+  id: number;
+  student_id: number;
+  start_at: string;
+  duration_min: number;
+  status: LessonStatus;
+  topic: string | null;
+  notes: string | null;
+  price: number;
+  tax_percent: number;
+  homework: Homework | null;
+  payment: Payment | null;
+}
+
+export interface Student {
+  id: number;
+  name: string;
+  notes: string | null;
+  price_per_hour: number;
+  is_active: boolean;
+}
+
+export interface StudentBalance {
+  student_id: number;
+  charged_total: number;
+  paid_total: number;
+  debt: number;
+}
+
+export interface DashboardSummary {
+  upcoming_count: number;
+  today_count: number;
+  unpaid_total: number;
+}
+
+export interface PaymentTransaction {
+  id: number;
+  student_id: number;
+  student_name: string | null;
+  lesson_id: number | null;
+  amount: number;
+  method: string;
+  comment: string | null;
+  paid_at: string;
+}
+
+export interface FinanceSummary {
+  income_month: number;
+  unpaid_total: number;
+  payments: PaymentTransaction[];
+}
+
+export class UnauthorizedError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
 export const tokenStorage = {
   get(): string | null {
     if (typeof window === "undefined") return null;
@@ -17,8 +102,6 @@ export const tokenStorage = {
   },
 };
 
-// Комментарий наставника: единая функция request держит обработку токена и ошибок в одном месте,
-// чтобы в методах API не дублировать одну и ту же инфраструктурную логику.
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers = new Headers(opts.headers || {});
   headers.set("Content-Type", "application/json");
@@ -28,6 +111,13 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${API_URL}${path}`, { ...opts, headers });
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      tokenStorage.clear();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+      throw new UnauthorizedError();
+    }
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
@@ -37,15 +127,6 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   }
 
   return (await res.json()) as T;
-}
-
-interface LessonPayload {
-  student_id: number;
-  start_at: string;
-  duration_min: number;
-  status: string;
-  topic: string | null;
-  price: number;
 }
 
 export const api = {
@@ -61,59 +142,119 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
   },
-  listStudents() {
-    return request<Array<{ id: number; name: string; notes: string | null }>>("/api/v1/students");
+  me() {
+    return request<User>("/api/v1/auth/me");
   },
-  createStudent(payload: { name: string; notes: string | null }) {
-    return request<{ id: number; name: string; notes: string | null }>("/api/v1/students", {
+  listStudents(params?: { q?: string; include_inactive?: boolean }) {
+    const q = new URLSearchParams();
+    if (params?.q) q.set("q", params.q);
+    if (params?.include_inactive) q.set("include_inactive", "true");
+    return request<Student[]>(`/api/v1/students${q.toString() ? `?${q.toString()}` : ""}`);
+  },
+  getStudent(studentId: string | number) {
+    return request<Student>(`/api/v1/students/${studentId}`);
+  },
+  restoreStudent(studentId: string | number) {
+    return request<Student>(`/api/v1/students/${studentId}/restore`, { method: "POST" });
+  },
+  getStudentBalance(studentId: string | number) {
+    return request<StudentBalance>(`/api/v1/students/${studentId}/balance`);
+  },
+  createStudent(payload: { name: string; notes: string | null; price_per_hour: number }) {
+    return request<Student>("/api/v1/students", {
       method: "POST",
       body: JSON.stringify(payload),
     });
   },
-  getStudent(id: string) {
-    return request<{ id: number; name: string; notes: string | null }>(`/api/v1/students/${id}`);
+  deleteStudent(studentId: string | number) {
+    return request<void>(`/api/v1/students/${studentId}`, { method: "DELETE" });
   },
-  createLesson(payload: LessonPayload) {
-    return request<{ id: number }>("/api/v1/lessons", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+  listStudentLessons(studentId: string | number) {
+    return request<Lesson[]>(`/api/v1/students/${studentId}/lessons`);
   },
-  getUpcoming(days: number) {
-    return request<{ items: unknown[] }>(`/api/v1/lessons/upcoming?days=${days}`);
-  },
-  requestLesson(id: number) {
-    return request<{
-      id: number;
-      start_at: string;
+  createStudentLesson(
+    studentId: string | number,
+    payload: {
+      starts_at: string;
+      topic: string;
+      notes: string | null;
       duration_min: number;
-      status: string;
-      topic?: string | null;
-      price: number;
-    }>(`/api/v1/lessons/${id}`);
-  },
-  updateLesson(id: number, payload: { status: string }) {
-    return request<{ id: number }>(`/api/v1/lessons/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
-  updatePayment(
-    id: number,
-    payload: { is_paid: boolean; paid_amount: number; paid_at: string },
+      homework_text?: string;
+      payment_amount?: number;
+    },
   ) {
-    return request<{ ok: boolean }>(`/api/v1/lessons/${id}/payment`, {
+    return request<Lesson>(`/api/v1/students/${studentId}/lessons`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  requestLesson(lessonId: number) {
+    return request<Lesson>(`/api/v1/lessons/${lessonId}`);
+  },
+  updateLesson(lessonId: number, payload: Record<string, unknown>) {
+    return request<Lesson>(`/api/v1/lessons/${lessonId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
-  updateHomework(
-    id: number,
-    payload: { text: string | null; link: string | null; is_sent: boolean; sent_at: string },
-  ) {
-    return request<{ ok: boolean }>(`/api/v1/lessons/${id}/homework`, {
-      method: "PATCH",
+  rescheduleLesson(lessonId: number, payload: { new_start_at: string; reason?: string; notify_student: boolean }) {
+    return request<Lesson>(`/api/v1/lessons/${lessonId}/reschedule`, {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   },
+  deleteLesson(lessonId: number) {
+    return request<void>(`/api/v1/lessons/${lessonId}`, { method: "DELETE" });
+  },
+  markHomeworkDone(lessonId: number) {
+    return request<Homework>(`/api/v1/lessons/${lessonId}/homework/done`, { method: "POST" });
+  },
+  markPaymentPaid(lessonId: number) {
+    return request<Payment>(`/api/v1/lessons/${lessonId}/payment/paid`, { method: "POST" });
+  },
+  createPaymentTransaction(payload: {
+    student_id: number;
+    lesson_id?: number;
+    amount: number;
+    method: string;
+    comment?: string;
+  }) {
+    return request<PaymentTransaction>("/api/v1/payments", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getUpcoming(days = 7) {
+    return request<{ items: Lesson[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
+  },
+  getDashboardSummary() {
+    return request<DashboardSummary>("/api/v1/dashboard/summary");
+  },
+  getHistory(limit = 20, status?: LessonStatus) {
+    const query = status ? `limit=${limit}&status=${status}` : `limit=${limit}`;
+    return request<{ items: Lesson[] }>(`/api/v1/dashboard/history?${query}`);
+  },
+  getFinanceSummary(month?: string) {
+    return request<FinanceSummary>(`/api/v1/finance/summary${month ? `?month=${month}` : ""}`);
+  },
+};
+
+export const lessonStatusLabel: Record<LessonStatus, string> = {
+  scheduled: "Запланирован",
+  completed: "Проведён",
+  canceled: "Отменён",
+  rescheduled: "Перенесён",
+  no_show: "Неявка",
+};
+
+export const homeworkStatusLabel: Record<HomeworkStatus, string> = {
+  assigned: "Задано",
+  submitted: "Отправлено",
+  reviewed: "Проверено",
+};
+
+export const paymentStatusLabel: Record<PaymentStatus, string> = {
+  unpaid: "Не оплачено",
+  partial: "Частично",
+  paid: "Оплачено",
 };

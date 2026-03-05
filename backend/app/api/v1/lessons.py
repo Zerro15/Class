@@ -1,18 +1,26 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
 from app.models.homework import Homework
 from app.models.lesson import Lesson
+from app.models.lesson_reschedule import LessonReschedule
 from app.models.payment import Payment
 from app.models.settings import Settings
 from app.models.student import Student
 from app.models.user import User
-from app.schemas.homework import HomeworkCreate, HomeworkOut, HomeworkUpdate
-from app.schemas.lesson import LessonCreate, LessonOut, LessonUpdate
-from app.schemas.payment import PaymentCreate, PaymentOut, PaymentUpdate
+from app.schemas.homework import HomeworkCreate, HomeworkOut, HomeworkStatus, HomeworkUpdate
+from app.schemas.lesson import (
+    LessonCreate,
+    LessonOut,
+    LessonReschedule as LessonReschedulePayload,
+    LessonUpdate,
+    LessonWithRelationsOut,
+)
+from app.schemas.payment import PaymentCreate, PaymentOut, PaymentStatus, PaymentUpdate
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
 
@@ -20,12 +28,24 @@ router = APIRouter(prefix="/lessons", tags=["lessons"])
 def get_lesson_or_404(db: Session, lesson_id: int, owner_id: int) -> Lesson:
     lesson = (
         db.query(Lesson)
+        .options(joinedload(Lesson.homework), joinedload(Lesson.payment))
         .filter(Lesson.id == lesson_id, Lesson.owner_id == owner_id)
         .first()
     )
     if not lesson:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
     return lesson
+
+
+def get_student_or_404(db: Session, student_id: int, owner_id: int) -> Student:
+    student = (
+        db.query(Student)
+        .filter(Student.id == student_id, Student.owner_id == owner_id)
+        .first()
+    )
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+    return student
 
 
 @router.get("", response_model=list[LessonOut])
@@ -43,12 +63,12 @@ def list_lessons(
     return query.order_by(Lesson.start_at.asc()).all()
 
 
-@router.get("/{lesson_id}", response_model=LessonOut)
+@router.get("/{lesson_id}", response_model=LessonWithRelationsOut)
 def get_lesson(
     lesson_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> LessonOut:
+) -> LessonWithRelationsOut:
     return get_lesson_or_404(db, lesson_id, current_user.id)
 
 
@@ -58,13 +78,7 @@ def create_lesson(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
-    student = (
-        db.query(Student)
-        .filter(Student.id == payload.student_id, Student.owner_id == current_user.id)
-        .first()
-    )
-    if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+    get_student_or_404(db, payload.student_id, current_user.id)
     settings = db.query(Settings).filter(Settings.owner_id == current_user.id).first()
     tax_percent = settings.tax_percent_default if settings else 0.0
     lesson = Lesson(
@@ -74,6 +88,7 @@ def create_lesson(
         duration_min=payload.duration_min,
         status=payload.status.value,
         topic=payload.topic,
+        notes=payload.notes,
         price=payload.price,
         tax_percent=tax_percent,
     )
@@ -83,27 +98,73 @@ def create_lesson(
     return lesson
 
 
-@router.patch("/{lesson_id}", response_model=LessonOut)
+@router.patch("/{lesson_id}", response_model=LessonWithRelationsOut)
 def update_lesson(
     lesson_id: int,
     payload: LessonUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> LessonOut:
+) -> LessonWithRelationsOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     if payload.start_at is not None:
         lesson.start_at = payload.start_at
+    if payload.starts_at is not None:
+        lesson.start_at = payload.starts_at
     if payload.duration_min is not None:
         lesson.duration_min = payload.duration_min
     if payload.status is not None:
         lesson.status = payload.status.value
     if payload.topic is not None:
         lesson.topic = payload.topic
+    if payload.notes is not None:
+        lesson.notes = payload.notes
     if payload.price is not None:
         lesson.price = payload.price
     db.commit()
     db.refresh(lesson)
     return lesson
+
+
+@router.post("/{lesson_id}/reschedule", response_model=LessonWithRelationsOut)
+def reschedule_lesson(
+    lesson_id: int,
+    payload: LessonReschedulePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LessonWithRelationsOut:
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    old_start_at = lesson.start_at
+    lesson.start_at = payload.new_start_at
+    lesson.status = "rescheduled"
+    # Фиксируем перенос отдельной записью, чтобы в будущем строить аналитику.
+    db.add(
+        LessonReschedule(
+            lesson_id=lesson.id,
+            old_start_at=old_start_at,
+            new_start_at=payload.new_start_at,
+            reason=payload.reason,
+            notify_student=payload.notify_student,
+        )
+    )
+    db.commit()
+    db.refresh(lesson)
+    return lesson
+
+
+@router.delete("/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_lesson(
+    lesson_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    if lesson.homework:
+        db.delete(lesson.homework)
+    if lesson.payment:
+        db.delete(lesson.payment)
+    db.delete(lesson)
+    db.commit()
+    return None
 
 
 @router.post("/{lesson_id}/payment", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
@@ -118,9 +179,10 @@ def create_payment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment already exists")
     payment = Payment(
         lesson_id=lesson.id,
-        is_paid=payload.is_paid,
-        paid_amount=payload.paid_amount,
-        paid_at=payload.paid_at,
+        amount=Decimal(payload.amount),
+        status=PaymentStatus.unpaid.value,
+        is_paid=False,
+        paid_amount=0.0,
     )
     db.add(payment)
     db.commit()
@@ -140,9 +202,52 @@ def update_payment(
     if not payment:
         payment = Payment(lesson_id=lesson.id)
         db.add(payment)
-    payment.is_paid = payload.is_paid
-    payment.paid_amount = payload.paid_amount
-    payment.paid_at = payload.paid_at
+    if payload.amount is not None:
+        payment.amount = Decimal(payload.amount)
+    if payload.paid_amount is not None:
+        payment.paid_amount = payload.paid_amount
+    if payload.paid_at is not None:
+        payment.paid_at = payload.paid_at
+
+    if payload.status is not None:
+        payment.status = payload.status.value
+    if payload.is_paid is not None:
+        payment.is_paid = payload.is_paid
+
+    # Единая логика статуса оплаты: unpaid/partial/paid.
+    target = float(payment.amount or 0)
+    paid = float(payment.paid_amount or 0)
+    if paid <= 0:
+        payment.status = PaymentStatus.unpaid.value
+        payment.is_paid = False
+    elif paid < target:
+        payment.status = PaymentStatus.partial.value
+        payment.is_paid = False
+    else:
+        payment.status = PaymentStatus.paid.value
+        payment.is_paid = True
+
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+@router.post("/{lesson_id}/payment/paid", response_model=PaymentOut)
+def mark_payment_paid(
+    lesson_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PaymentOut:
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    payment = lesson.payment
+    if not payment:
+        # Если оплата ещё не создана, берём сумму из цены урока.
+        payment = Payment(lesson_id=lesson.id, amount=Decimal(lesson.price))
+        db.add(payment)
+    payment.paid_amount = float(payment.amount or lesson.price)
+    payment.status = PaymentStatus.paid.value
+    payment.is_paid = True
+    payment.paid_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(payment)
     return payment
@@ -161,9 +266,8 @@ def create_homework(
     homework = Homework(
         lesson_id=lesson.id,
         text=payload.text,
-        link=payload.link,
-        is_sent=payload.is_sent,
-        sent_at=payload.sent_at,
+        status=HomeworkStatus.assigned.value,
+        is_sent=False,
     )
     db.add(homework)
     db.commit()
@@ -181,12 +285,40 @@ def update_homework(
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     homework = lesson.homework
     if not homework:
-        homework = Homework(lesson_id=lesson.id)
+        homework = Homework(lesson_id=lesson.id, status=HomeworkStatus.assigned.value)
         db.add(homework)
-    homework.text = payload.text
-    homework.link = payload.link
-    homework.is_sent = payload.is_sent
-    homework.sent_at = payload.sent_at
+    if payload.text is not None:
+        homework.text = payload.text
+    if payload.link is not None:
+        homework.link = payload.link
+    if payload.status is not None:
+        homework.status = payload.status.value
+    if payload.is_sent is not None:
+        homework.is_sent = payload.is_sent
+    if payload.sent_at is not None:
+        homework.sent_at = payload.sent_at
+
+    # Синхронизируем legacy-флаг с новым статусом.
+    homework.is_sent = homework.status in {HomeworkStatus.submitted.value, HomeworkStatus.reviewed.value}
+
+    db.commit()
+    db.refresh(homework)
+    return homework
+
+
+@router.post("/{lesson_id}/homework/done", response_model=HomeworkOut)
+def mark_homework_done(
+    lesson_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> HomeworkOut:
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    homework = lesson.homework
+    if not homework:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Homework not found")
+    homework.status = HomeworkStatus.reviewed.value
+    homework.is_sent = True
+    homework.sent_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(homework)
     return homework
