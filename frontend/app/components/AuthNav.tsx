@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { tokenStorage } from "@/lib/api";
+import { clearToken, getToken } from "@/lib/api";
 import { ConfirmModal } from "@/app/components/ConfirmModal";
 import { useToast } from "@/app/components/ToastProvider";
 
@@ -16,11 +16,12 @@ export function AuthNav() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    setHasToken(Boolean(tokenStorage.get()));
+    setHasToken(Boolean(getToken()));
   }, []);
 
   const handleConfirmLogout = () => {
-    tokenStorage.clear();
+    // Комментарий наставника: при logout чистим локальную сессию до редиректа, чтобы защищённые экраны не успели перерендериться со старым токеном.
+    clearToken();
     setHasToken(false);
     setIsModalOpen(false);
     showToast("Вы вышли", "success");
@@ -29,7 +30,7 @@ export function AuthNav() {
 
   if (!hasToken) {
     return (
-      <Link href="/login" className="text-slate-600 transition-colors hover:text-slate-900">
+      <Link href="/login" className="rounded-sm bg-yellow-400 px-4 py-2 font-semibold text-slate-900 shadow">
         Вход
       </Link>
     );
@@ -38,10 +39,10 @@ export function AuthNav() {
   return (
     <>
       <button
-        className="text-slate-600 transition-colors hover:text-slate-900"
+        className="rounded-sm bg-yellow-400 px-4 py-2 font-semibold text-slate-900 shadow"
         onClick={() => setIsModalOpen(true)}
       >
-        Выйти
+        Выход
       </button>
 
       <ConfirmModal
