@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { api } from "@/lib/api";
@@ -21,18 +21,19 @@ export default function StudentDetailPage() {
   const [price, setPrice] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  // Комментарий наставника: useCallback стабилизирует ссылку на load, чтобы useEffect корректно отслеживал зависимость без предупреждений линтера.
+  const load = useCallback(async () => {
     try {
       const data = await api.getStudent(params.id);
       setStudent(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
     }
-  };
+  }, [params.id]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const handleCreateLesson = async (event: React.FormEvent) => {
     event.preventDefault();
