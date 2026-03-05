@@ -5,7 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -14,11 +13,7 @@ from app.api.deps import get_db  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.main import app  # noqa: E402
 
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

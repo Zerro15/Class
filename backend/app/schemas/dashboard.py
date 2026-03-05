@@ -5,7 +5,3 @@ from app.schemas.lesson import LessonOut
 
 class DashboardUpcoming(BaseModel):
     items: list[LessonOut]
-
-
-class DashboardHistory(BaseModel):
-    items: list[LessonOut]

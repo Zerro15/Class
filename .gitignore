@@ -10,6 +10,6 @@ build/
 # local backups
 backups/
 
-# local virtualenvs
-.venv/
+# local venvs
 backend/.venv/
+.venv/
