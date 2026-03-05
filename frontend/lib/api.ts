@@ -117,7 +117,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-interface LessonPayload {
+export interface LessonPayload {
   student_id: number;
   start_at: string;
   duration_min: number;
@@ -143,6 +143,17 @@ function toQueryString(filters: FinanceFilters): string {
   });
   const raw = params.toString();
   return raw ? `?${raw}` : "";
+}
+
+
+export interface LessonSeriesPayload {
+  student_id: number;
+  weekday: number;
+  time_of_day: string;
+  duration_min: number;
+  topic: string | null;
+  price: number;
+  is_active: boolean;
 }
 
 export const api = {
@@ -191,6 +202,7 @@ export const api = {
         price: number;
         is_paid?: boolean | null;
         is_homework_sent?: boolean | null;
+        series_id?: number | null;
       }>;
     }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
@@ -205,7 +217,18 @@ export const api = {
       is_archived: boolean;
     }>(`/api/v1/lessons/${id}`);
   },
-  updateLesson(id: number, payload: { status?: string; is_archived?: boolean }) {
+  updateLesson(
+    id: number,
+    payload: {
+      student_id?: number;
+      start_at?: string;
+      duration_min?: number;
+      status?: string;
+      topic?: string | null;
+      price?: number;
+      is_archived?: boolean;
+    },
+  ) {
     return request<{ id: number }>(`/api/v1/lessons/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -264,5 +287,53 @@ export const api = {
         transferred_at: string | null;
       }>;
     }>(`/api/v1/finance/items${toQueryString(filters)}`);
+  },
+
+  listLessonSeries() {
+    return request<Array<{
+      id: number;
+      owner_id: number;
+      student_id: number;
+      weekday: number;
+      time_of_day: string;
+      duration_min: number;
+      topic?: string | null;
+      price: number;
+      is_active: boolean;
+    }>>("/api/v1/lesson-series");
+  },
+  createLessonSeries(payload: LessonSeriesPayload) {
+    return request<{ id: number }>("/api/v1/lesson-series", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLessonSeries(id: number, payload: Partial<LessonSeriesPayload>) {
+    return request<{ id: number }>(`/api/v1/lesson-series/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLessonSeries(id: number) {
+    return request<void>(`/api/v1/lesson-series/${id}`, { method: "DELETE" });
+  },
+  applySchedule(payload: { week_start: string; days?: number; strategy?: string }) {
+    return request<{ created: number; skipped: number }>("/api/v1/schedule/apply", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  applySeriesPatch(
+    id: number,
+    payload: {
+      from_start_at: string;
+      patch: { duration_min?: number; topic?: string | null; price?: number };
+      also_update_series_template?: boolean;
+    },
+  ) {
+    return request<{ updated_lessons: number; series_updated: boolean }>(`/api/v1/lesson-series/${id}/apply`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
 };

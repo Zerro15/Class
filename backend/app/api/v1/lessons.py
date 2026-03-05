@@ -91,6 +91,15 @@ def update_lesson(
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    if payload.student_id is not None:
+        student = (
+            db.query(Student)
+            .filter(Student.id == payload.student_id, Student.owner_id == current_user.id)
+            .first()
+        )
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+        lesson.student_id = payload.student_id
     if payload.start_at is not None:
         lesson.start_at = payload.start_at
     if payload.duration_min is not None:
