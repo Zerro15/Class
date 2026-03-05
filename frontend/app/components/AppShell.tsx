@@ -59,14 +59,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/dashboard" className="text-lg font-semibold">
             ClassFlow
           </Link>
-          <nav className="flex gap-4 text-sm">
-            <Link href="/students" className="text-slate-600 hover:text-slate-900">
+          <nav className="flex gap-2 text-sm">
+            <Link href="/students" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
               Ученики
             </Link>
-            <Link href="/dashboard" className="text-slate-600 hover:text-slate-900">
+            <Link href="/dashboard" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
               Дашборд
             </Link>
-            <Link href="/finance" className="text-slate-600 hover:text-slate-900">
+            <Link href="/finance" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
               Финансы
             </Link>
             <AuthNav />

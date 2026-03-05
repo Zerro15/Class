@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { clearToken, getToken } from "@/lib/api";
 import { ConfirmModal } from "@/app/components/ConfirmModal";
 import { useToast } from "@/app/components/ToastProvider";
+import { Button } from "@/components/ui/button";
+import { clearToken, getToken } from "@/lib/api";
 
 export function AuthNav() {
   const router = useRouter();
@@ -20,7 +21,6 @@ export function AuthNav() {
   }, []);
 
   const handleConfirmLogout = () => {
-    // Комментарий наставника: при logout чистим локальную сессию до редиректа, чтобы защищённые экраны не успели перерендериться со старым токеном.
     clearToken();
     setHasToken(false);
     setIsModalOpen(false);
@@ -30,7 +30,7 @@ export function AuthNav() {
 
   if (!hasToken) {
     return (
-      <Link href="/login" className="rounded-md border border-slate-300 px-4 py-2 font-medium text-slate-800 hover:bg-slate-50">
+      <Link href="/login" className="inline-flex h-9 items-center justify-center rounded-md px-4 py-2 text-sm font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-900">
         Вход
       </Link>
     );
@@ -38,12 +38,14 @@ export function AuthNav() {
 
   return (
     <>
-      <button
-        className="rounded-md border border-slate-300 px-4 py-2 font-medium text-slate-800 hover:bg-slate-50"
+      <Button
+        variant="ghost"
+        size="default"
+        className="text-sm font-normal text-slate-600 hover:text-slate-900"
         onClick={() => setIsModalOpen(true)}
       >
         Выход
-      </button>
+      </Button>
 
       <ConfirmModal
         open={isModalOpen}
