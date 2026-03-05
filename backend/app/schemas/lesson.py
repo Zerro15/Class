@@ -24,6 +24,7 @@ class LessonCreate(LessonBase):
 
 
 class LessonUpdate(BaseModel):
+    student_id: int | None = None
     start_at: datetime | None = None
     duration_min: int | None = Field(None, gt=0)
     status: LessonStatus | None = None
@@ -42,6 +43,7 @@ class LessonOut(BaseModel):
     price: float
     tax_percent: float
     is_archived: bool
+    series_id: int | None
 
     class Config:
         from_attributes = True

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, dashboard, finance, lessons, students
+from app.api.v1 import auth, dashboard, finance, lesson_series, lessons, students
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -21,6 +21,9 @@ app.include_router(students.router, prefix=settings.api_v1_prefix)
 app.include_router(lessons.router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(finance.router, prefix=settings.api_v1_prefix)
+
+app.include_router(lesson_series.router, prefix=settings.api_v1_prefix)
+app.include_router(lesson_series.schedule_router, prefix=settings.api_v1_prefix)
 
 
 @app.get(f"{settings.api_v1_prefix}/health")

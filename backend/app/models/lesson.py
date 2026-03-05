@@ -19,6 +19,7 @@ class Lesson(Base):
     price: Mapped[float] = mapped_column(Float, default=0.0)
     tax_percent: Mapped[float] = mapped_column(Float, default=0.0)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    series_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_series.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )
@@ -27,3 +28,4 @@ class Lesson(Base):
     student = relationship("Student", back_populates="lessons")
     payment = relationship("Payment", back_populates="lesson", uselist=False)
     homework = relationship("Homework", back_populates="lesson", uselist=False)
+    series = relationship("LessonSeries", back_populates="lessons")
