@@ -9,3 +9,7 @@ build/
 
 # local backups
 backups/
+
+# local virtualenvs
+.venv/
+backend/.venv/
