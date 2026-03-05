@@ -42,6 +42,7 @@ def upcoming_lessons(
                 "price": lesson.price,
                 "tax_percent": lesson.tax_percent,
                 "is_archived": lesson.is_archived,
+                "series_id": lesson.series_id,
                 "is_paid": lesson.payment.is_paid if lesson.payment else None,
                 "is_homework_sent": lesson.homework.is_sent if lesson.homework else None,
             }
