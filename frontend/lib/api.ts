@@ -2,6 +2,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const TOKEN_KEY = "classflow_token";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
 export const tokenStorage = {
   get(): string | null {
     if (typeof window === "undefined") return null;
@@ -17,8 +33,6 @@ export const tokenStorage = {
   },
 };
 
-// Комментарий наставника: единая функция request держит обработку токена и ошибок в одном месте,
-// чтобы в методах API не дублировать одну и ту же инфраструктурную логику.
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers = new Headers(opts.headers || {});
   headers.set("Content-Type", "application/json");
@@ -27,9 +41,22 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...opts, headers });
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = (await res.json()) as { detail?: string };
+      if (data.detail) message = data.detail;
+    } catch {
+      const text = await res.text();
+      if (text) message = text;
+    }
+
+    if (res.status === 401 && path !== "/api/v1/auth/login" && path !== "/api/v1/auth/register") {
+      tokenStorage.clear();
+      unauthorizedHandler?.();
+    }
+    throw new ApiError(res.status, message);
   }
 
   if (res.status === 204) {
@@ -61,6 +88,9 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
   },
+  me() {
+    return request<{ id: number; email: string }>("/api/v1/auth/me");
+  },
   listStudents() {
     return request<Array<{ id: number; name: string; notes: string | null }>>("/api/v1/students");
   },
@@ -80,7 +110,7 @@ export const api = {
     });
   },
   getUpcoming(days: number) {
-    return request<{ items: unknown[] }>(`/api/v1/lessons/upcoming?days=${days}`);
+    return request<{ items: unknown[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
   requestLesson(id: number) {
     return request<{
@@ -98,19 +128,13 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  updatePayment(
-    id: number,
-    payload: { is_paid: boolean; paid_amount: number; paid_at: string },
-  ) {
+  updatePayment(id: number, payload: { is_paid: boolean; paid_amount: number; paid_at: string }) {
     return request<{ ok: boolean }>(`/api/v1/lessons/${id}/payment`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
-  updateHomework(
-    id: number,
-    payload: { text: string | null; link: string | null; is_sent: boolean; sent_at: string },
-  ) {
+  updateHomework(id: number, payload: { text: string | null; link: string | null; is_sent: boolean; sent_at: string }) {
     return request<{ ok: boolean }>(`/api/v1/lessons/${id}/homework`, {
       method: "PATCH",
       body: JSON.stringify(payload),

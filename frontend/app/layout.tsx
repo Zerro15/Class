@@ -1,7 +1,7 @@
 import "./globals.css";
 
 import { AuthNav } from "./components/AuthNav";
-import { ToastProvider } from "./components/ToastProvider";
+import { AppProviders } from "./components/AppProviders";
 
 export const metadata = {
   title: "ClassFlow",
@@ -16,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body>
-        <ToastProvider>
+        <AppProviders>
           <div className="min-h-screen">
             <header className="border-b bg-white">
               <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
@@ -30,14 +30,13 @@ export default function RootLayout({
                   <a href="/dashboard" className="text-slate-600 hover:text-slate-900">
                     Дашборд
                   </a>
-                  {/* Комментарий наставника: отдельный AuthNav централизует логику входа/выхода и не дублирует её в layout. */}
                   <AuthNav />
                 </nav>
               </div>
             </header>
             <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
           </div>
-        </ToastProvider>
+        </AppProviders>
       </body>
     </html>
   );

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-import { api } from "@/lib/api";
+import { api } from "@/lib/api"
+import { useUnsavedChanges } from "@/app/components/UnsavedChangesProvider";
 import { Button } from "@/components/ui/button";
 
 interface Student {
@@ -18,6 +19,7 @@ export default function StudentsPage() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setHasUnsavedChanges } = useUnsavedChanges();
 
   const load = async () => {
     setLoading(true);
@@ -35,6 +37,11 @@ export default function StudentsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    setHasUnsavedChanges(name.trim().length > 0 || notes.trim().length > 0);
+    return () => setHasUnsavedChanges(false);
+  }, [name, notes, setHasUnsavedChanges]);
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();

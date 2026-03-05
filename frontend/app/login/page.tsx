@@ -4,7 +4,8 @@ import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { api, tokenStorage } from "@/lib/api";
+import { ApiError, api, tokenStorage } from "@/lib/api"
+import { useSession } from "@/app/components/SessionProvider";
 import { useToast } from "@/app/components/ToastProvider";
 
 type AuthMode = "login" | "register";
@@ -13,6 +14,7 @@ function AuthScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { refreshSession } = useSession();
 
   const initialMode = searchParams.get("mode") === "register" ? "register" : "login";
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -51,10 +53,11 @@ function AuthScreen() {
     try {
       const res = isRegister ? await api.register(email, password) : await api.login(email, password);
       tokenStorage.set(res.access_token);
+      await refreshSession();
       showToast(isRegister ? "Аккаунт создан" : "Успешный вход", "success");
       router.push("/dashboard");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Ошибка";
+      const msg = err instanceof ApiError && err.status === 401 ? "Invalid credentials" : err instanceof Error ? err.message : "Ошибка";
       setError(msg);
       showToast(msg, "error");
     } finally {
