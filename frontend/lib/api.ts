@@ -180,7 +180,19 @@ export const api = {
     });
   },
   getUpcoming(days: number) {
-    return request<{ items: unknown[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
+    return request<{
+      items: Array<{
+        id: number;
+        student_id: number;
+        start_at: string;
+        duration_min: number;
+        status: "scheduled" | "done" | "canceled";
+        topic?: string | null;
+        price: number;
+        is_paid?: boolean | null;
+        is_homework_sent?: boolean | null;
+      }>;
+    }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
   requestLesson(id: number) {
     return request<{
@@ -217,7 +229,7 @@ export const api = {
   },
   updateHomework(
     id: number,
-    payload: { text: string | null; link: string | null; is_sent: boolean; sent_at: string },
+    payload: { text: string | null; link: string | null; is_sent: boolean; sent_at: string | null },
   ) {
     return request<{ ok: boolean }>(`/api/v1/lessons/${id}/homework`, {
       method: "PATCH",
