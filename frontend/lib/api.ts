@@ -1,40 +1,87 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const TOKEN_KEY = "classflow_token";
 
-export const TOKEN_KEY = "classflow_token";
+export interface ApiErrorShape {
+  status: number;
+  message: string;
+}
 
-export const tokenStorage = {
-  get(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(TOKEN_KEY);
-  },
-  set(token: string) {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(TOKEN_KEY, token);
-  },
-  clear() {
-    if (typeof window === "undefined") return;
-    localStorage.removeItem(TOKEN_KEY);
-  },
-};
+export class ApiError extends Error {
+  status: number;
 
-// Комментарий наставника: единая функция request держит обработку токена и ошибок в одном месте,
-// чтобы в методах API не дублировать одну и ту же инфраструктурную логику.
+  constructor({ status, message }: ApiErrorShape) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+function redirectToLoginIfNeeded() {
+  if (typeof window === "undefined") return;
+
+  const isAuthRoute = window.location.pathname === "/login" || window.location.pathname === "/register";
+  // Комментарий наставника: на страницах авторизации не редиректим повторно, чтобы не создавать циклы переходов.
+  if (!isAuthRoute) {
+    window.location.href = "/login";
+  }
+}
+
+async function parseApiError(res: Response): Promise<ApiError> {
+  const text = await res.text();
+
+  try {
+    const json = JSON.parse(text) as { detail?: string };
+    if (json.detail) {
+      return new ApiError({ status: res.status, message: json.detail });
+    }
+  } catch {
+    // ignore JSON parse error
+  }
+
+  return new ApiError({ status: res.status, message: text || `HTTP ${res.status}` });
+}
+
+// Комментарий наставника: единый request убирает дублирование и гарантирует единое поведение токена/ошибок по всему приложению.
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const headers = new Headers(opts.headers || {});
-  headers.set("Content-Type", "application/json");
+  const hasBody = opts.body !== undefined;
 
-  const token = tokenStorage.get();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const token = getToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
 
   const res = await fetch(`${API_URL}${path}`, { ...opts, headers });
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    if (res.status === 401 || res.status === 403) {
+      // Комментарий наставника: при невалидной сессии сразу чистим токен, чтобы приложение не жило в «битом» состоянии.
+      clearToken();
+      redirectToLoginIfNeeded();
+    }
+
+    throw await parseApiError(res);
   }
 
-  if (res.status === 204) {
-    return undefined as T;
-  }
+  if (res.status === 204) return undefined as T;
 
   return (await res.json()) as T;
 }
@@ -60,6 +107,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
+  },
+  me() {
+    return request<{ id: number; email: string }>("/api/v1/auth/me");
   },
   listStudents() {
     return request<Array<{ id: number; name: string; notes: string | null }>>("/api/v1/students");
@@ -98,10 +148,7 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
-  updatePayment(
-    id: number,
-    payload: { is_paid: boolean; paid_amount: number; paid_at: string },
-  ) {
+  updatePayment(id: number, payload: { is_paid: boolean; paid_amount: number; paid_at: string }) {
     return request<{ ok: boolean }>(`/api/v1/lessons/${id}/payment`, {
       method: "PATCH",
       body: JSON.stringify(payload),
