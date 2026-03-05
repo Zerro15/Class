@@ -13,3 +13,7 @@ backups/
 # local venvs
 backend/.venv/
 .venv/
+
+# Next.js build
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
