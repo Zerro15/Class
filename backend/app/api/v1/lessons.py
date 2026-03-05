@@ -101,6 +101,8 @@ def update_lesson(
         lesson.topic = payload.topic
     if payload.price is not None:
         lesson.price = payload.price
+    if payload.is_archived is not None:
+        lesson.is_archived = payload.is_archived
     db.commit()
     db.refresh(lesson)
     return lesson
@@ -121,6 +123,9 @@ def create_payment(
         is_paid=payload.is_paid,
         paid_amount=payload.paid_amount,
         paid_at=payload.paid_at,
+        is_transferred=payload.is_transferred,
+        transferred_amount=payload.transferred_amount,
+        transferred_at=payload.transferred_at,
     )
     db.add(payment)
     db.commit()
@@ -143,6 +148,9 @@ def update_payment(
     payment.is_paid = payload.is_paid
     payment.paid_amount = payload.paid_amount
     payment.paid_at = payload.paid_at
+    payment.is_transferred = payload.is_transferred
+    payment.transferred_amount = payload.transferred_amount
+    payment.transferred_at = payload.transferred_at
     db.commit()
     db.refresh(payment)
     return payment

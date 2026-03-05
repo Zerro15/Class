@@ -15,10 +15,12 @@
 | GET | /lessons | Список занятий, фильтр `from`/`to` |
 | GET | /lessons/{id} | Карточка занятия |
 | POST | /lessons | Создать занятие |
-| PATCH | /lessons/{id} | Обновить занятие |
-| POST | /lessons/{id}/payment | Создать оплату |
-| PATCH | /lessons/{id}/payment | Обновить оплату |
+| PATCH | /lessons/{id} | Обновить занятие (включая `is_archived`) |
+| POST | /lessons/{id}/payment | Создать оплату/перевод |
+| PATCH | /lessons/{id}/payment | Обновить оплату/перевод |
 | POST | /lessons/{id}/homework | Создать домашку |
 | PATCH | /lessons/{id}/homework | Обновить домашку |
 | GET | /dashboard/upcoming | Ближайшие занятия (`days` параметр) |
+| GET | /finance/summary | Финансовые итоги (`from,to,student_id,paid,transferred,archived`) |
+| GET | /finance/items | Финансовый список (`from,to,student_id,paid,transferred,archived`) |
 | GET | /health | Проверка сервиса |

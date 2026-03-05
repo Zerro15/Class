@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -18,6 +18,7 @@ class Lesson(Base):
     topic: Mapped[str | None] = mapped_column(String(255))
     price: Mapped[float] = mapped_column(Float, default=0.0)
     tax_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

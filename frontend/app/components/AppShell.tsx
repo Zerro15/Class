@@ -66,6 +66,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/dashboard" className="text-slate-600 hover:text-slate-900">
               Дашборд
             </Link>
+            <Link href="/finance" className="text-slate-600 hover:text-slate-900">
+              Финансы
+            </Link>
             <AuthNav />
           </nav>
         </div>

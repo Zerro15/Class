@@ -40,14 +40,45 @@ function redirectToLoginIfNeeded() {
   }
 }
 
+function normalizeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((entry) => {
+        if (typeof entry === "string") return entry;
+        if (entry && typeof entry === "object") {
+          const maybeMsg = (entry as { msg?: unknown }).msg;
+          const maybeLoc = (entry as { loc?: unknown }).loc;
+          const loc = Array.isArray(maybeLoc) ? maybeLoc.join(" → ") : "поле";
+          if (typeof maybeMsg === "string") {
+            return `${loc}: ${maybeMsg}`;
+          }
+        }
+        return "Заполните корректно поля формы";
+      })
+      .join("; ");
+  }
+
+  if (detail && typeof detail === "object") {
+    const detailText = Object.values(detail as Record<string, unknown>)
+      .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+      .join(", ");
+    return detailText || "Ошибка в данных";
+  }
+
+  return "Ошибка в данных";
+}
+
 async function parseApiError(res: Response): Promise<ApiError> {
   const text = await res.text();
 
   try {
-    const json = JSON.parse(text) as { detail?: string };
-    if (json.detail) {
-      return new ApiError({ status: res.status, message: json.detail });
+    const json = JSON.parse(text) as { detail?: unknown };
+    if (json.detail !== undefined) {
+      return new ApiError({ status: res.status, message: normalizeDetail(json.detail) });
     }
+    return new ApiError({ status: res.status, message: normalizeDetail(json) });
   } catch {
     // ignore JSON parse error
   }
@@ -95,6 +126,25 @@ interface LessonPayload {
   price: number;
 }
 
+export interface FinanceFilters {
+  from?: string;
+  to?: string;
+  student_id?: number;
+  paid?: boolean;
+  transferred?: boolean;
+  archived?: boolean;
+}
+
+function toQueryString(filters: FinanceFilters): string {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, String(value));
+  });
+  const raw = params.toString();
+  return raw ? `?${raw}` : "";
+}
+
 export const api = {
   login(email: string, password: string) {
     return request<{ access_token: string; token_type: string }>("/api/v1/auth/login", {
@@ -130,7 +180,7 @@ export const api = {
     });
   },
   getUpcoming(days: number) {
-    return request<{ items: unknown[] }>(`/api/v1/lessons/upcoming?days=${days}`);
+    return request<{ items: unknown[] }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
   requestLesson(id: number) {
     return request<{
@@ -140,15 +190,26 @@ export const api = {
       status: string;
       topic?: string | null;
       price: number;
+      is_archived: boolean;
     }>(`/api/v1/lessons/${id}`);
   },
-  updateLesson(id: number, payload: { status: string }) {
+  updateLesson(id: number, payload: { status?: string; is_archived?: boolean }) {
     return request<{ id: number }>(`/api/v1/lessons/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
-  updatePayment(id: number, payload: { is_paid: boolean; paid_amount: number; paid_at: string }) {
+  updatePayment(
+    id: number,
+    payload: {
+      is_paid: boolean;
+      paid_amount: number;
+      paid_at: string | null;
+      is_transferred?: boolean;
+      transferred_amount?: number;
+      transferred_at?: string | null;
+    },
+  ) {
     return request<{ ok: boolean }>(`/api/v1/lessons/${id}/payment`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -162,5 +223,34 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  },
+  financeSummary(filters: FinanceFilters) {
+    return request<{
+      income_paid: number;
+      debt_unpaid: number;
+      transferred_sum: number;
+      not_transferred_sum: number;
+      lessons_count: number;
+    }>(`/api/v1/finance/summary${toQueryString(filters)}`);
+  },
+  financeItems(filters: FinanceFilters) {
+    return request<{
+      items: Array<{
+        lesson_id: number;
+        student_id: number;
+        student_name: string;
+        start_at: string;
+        status: string;
+        topic: string | null;
+        price: number;
+        is_archived: boolean;
+        is_paid: boolean;
+        paid_amount: number;
+        paid_at: string | null;
+        is_transferred: boolean;
+        transferred_amount: number;
+        transferred_at: string | null;
+      }>;
+    }>(`/api/v1/finance/items${toQueryString(filters)}`);
   },
 };

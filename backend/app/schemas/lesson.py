@@ -29,6 +29,7 @@ class LessonUpdate(BaseModel):
     status: LessonStatus | None = None
     topic: str | None = None
     price: float | None = Field(None, ge=0)
+    is_archived: bool | None = None
 
 
 class LessonOut(BaseModel):
@@ -40,6 +41,7 @@ class LessonOut(BaseModel):
     topic: str | None
     price: float
     tax_percent: float
+    is_archived: bool
 
     class Config:
         from_attributes = True

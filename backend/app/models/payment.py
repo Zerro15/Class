@@ -14,5 +14,8 @@ class Payment(Base):
     is_paid: Mapped[bool] = mapped_column(Boolean, default=False)
     paid_amount: Mapped[float] = mapped_column(Float, default=0.0)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_transferred: Mapped[bool] = mapped_column(Boolean, default=False)
+    transferred_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    transferred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     lesson = relationship("Lesson", back_populates="payment")
