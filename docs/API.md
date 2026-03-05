@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | POST | /auth/register | Регистрация и выдача access token |
 | POST | /auth/login | Логин и выдача access token |
+| GET | /auth/me | Текущий пользователь по Bearer токену |
 | GET | /students | Список учеников пользователя |
 | POST | /students | Создание ученика |
 | GET | /students/{id} | Получить ученика |

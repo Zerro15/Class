@@ -30,7 +30,7 @@ export function AuthNav() {
 
   if (!hasToken) {
     return (
-      <Link href="/login" className="rounded-sm bg-yellow-400 px-4 py-2 font-semibold text-slate-900 shadow">
+      <Link href="/login" className="rounded-md border border-slate-300 px-4 py-2 font-medium text-slate-800 hover:bg-slate-50">
         Вход
       </Link>
     );
@@ -39,7 +39,7 @@ export function AuthNav() {
   return (
     <>
       <button
-        className="rounded-sm bg-yellow-400 px-4 py-2 font-semibold text-slate-900 shadow"
+        className="rounded-md border border-slate-300 px-4 py-2 font-medium text-slate-800 hover:bg-slate-50"
         onClick={() => setIsModalOpen(true)}
       >
         Выход

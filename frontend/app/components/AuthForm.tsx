@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  const title = useMemo(() => (isLogin ? "Вход" : "Регистрация"), [isLogin]);
+  const title = isLogin ? "Вход" : "Регистрация";
 
   useEffect(() => {
     const validateSavedSession = async () => {
@@ -103,11 +103,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-4xl border border-slate-200 bg-white px-8 py-14">
-      <div className="absolute right-[-2.5rem] top-7">
-        <div className="rounded-sm bg-yellow-400 px-8 py-10 text-sm font-semibold text-slate-900 shadow">{title}</div>
-      </div>
-
+    <div className="mx-auto w-full max-w-4xl border border-slate-200 bg-white px-8 py-14">
       <form className="mx-auto w-full max-w-sm space-y-4" onSubmit={handleSubmit}>
         <h1 className="mb-10 text-center text-xl font-semibold text-slate-900">{title}</h1>
 
