@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { api } from "@/lib/api";
+import { api } from "@/lib/api"
+import { useUnsavedChanges } from "@/app/components/UnsavedChangesProvider";
 import { Button } from "@/components/ui/button";
 
 interface Student {
@@ -20,6 +21,7 @@ export default function StudentDetailPage() {
   const [duration, setDuration] = useState(60);
   const [price, setPrice] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const { setHasUnsavedChanges } = useUnsavedChanges();
 
   // Комментарий наставника: useCallback стабилизирует ссылку на load, чтобы useEffect корректно отслеживал зависимость без предупреждений линтера.
   const load = useCallback(async () => {
@@ -34,6 +36,11 @@ export default function StudentDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setHasUnsavedChanges(Boolean(startAt || topic || price > 0 || duration !== 60));
+    return () => setHasUnsavedChanges(false);
+  }, [duration, price, startAt, topic, setHasUnsavedChanges]);
 
   const handleCreateLesson = async (event: React.FormEvent) => {
     event.preventDefault();

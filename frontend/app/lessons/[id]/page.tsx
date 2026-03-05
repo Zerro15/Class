@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { api } from "@/lib/api";
+import { api } from "@/lib/api"
+import { useUnsavedChanges } from "@/app/components/UnsavedChangesProvider";
 import { Button } from "@/components/ui/button";
 
 interface Lesson {
@@ -22,6 +23,7 @@ export default function LessonDetailPage() {
   const [status, setStatus] = useState("scheduled");
   const [paidAmount, setPaidAmount] = useState(0);
   const [homeworkText, setHomeworkText] = useState("");
+  const { setHasUnsavedChanges } = useUnsavedChanges();
 
   // Комментарий наставника: useCallback стабилизирует ссылку на load, чтобы useEffect корректно отслеживал зависимость без предупреждений линтера.
   const load = useCallback(async () => {
@@ -38,9 +40,15 @@ export default function LessonDetailPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setHasUnsavedChanges(status !== "scheduled" || paidAmount > 0 || homeworkText.trim().length > 0);
+    return () => setHasUnsavedChanges(false);
+  }, [homeworkText, paidAmount, setHasUnsavedChanges, status]);
+
   const updateStatus = async () => {
     await api.updateLesson(Number(params.id), { status });
     await load();
+    setHasUnsavedChanges(false);
   };
 
   const updatePayment = async () => {
@@ -50,6 +58,7 @@ export default function LessonDetailPage() {
       paid_at: new Date().toISOString()
     });
     await load();
+    setHasUnsavedChanges(false);
   };
 
   const updateHomework = async () => {
@@ -60,6 +69,7 @@ export default function LessonDetailPage() {
       sent_at: new Date().toISOString()
     });
     await load();
+    setHasUnsavedChanges(false);
   };
 
   if (!lesson) {

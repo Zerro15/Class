@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
+from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.settings import Settings
 from app.models.user import User
-from app.schemas.auth import Token, UserCreate
-from app.core.config import get_settings
+from app.schemas.auth import Token, UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -15,7 +15,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
     user = User(email=payload.email, hashed_password=hash_password(payload.password))
     db.add(user)
     db.flush()
@@ -33,3 +36,8 @@ def login(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token(str(user.id))
     return Token(access_token=token)
+
+
+@router.get("/me", response_model=UserOut)
+def me(current_user: User = Depends(get_current_user)) -> UserOut:
+    return current_user

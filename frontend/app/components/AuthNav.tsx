@@ -1,33 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-import { tokenStorage } from "@/lib/api";
 import { ConfirmModal } from "@/app/components/ConfirmModal";
 import { useToast } from "@/app/components/ToastProvider";
+import { useSession } from "@/app/components/SessionProvider";
+import { useUnsavedChanges } from "@/app/components/UnsavedChangesProvider";
 
 export function AuthNav() {
-  const router = useRouter();
   const { showToast } = useToast();
+  const { isAuthenticated, logout } = useSession();
+  const { hasUnsavedChanges, setHasUnsavedChanges } = useUnsavedChanges();
 
-  const [hasToken, setHasToken] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
 
-  useEffect(() => {
-    setHasToken(Boolean(tokenStorage.get()));
-  }, []);
-
-  const handleConfirmLogout = () => {
-    tokenStorage.clear();
-    setHasToken(false);
-    setIsModalOpen(false);
-    showToast("Вы вышли", "success");
-    router.push("/login");
+  const startLogout = () => {
+    if (hasUnsavedChanges) {
+      setIsUnsavedModalOpen(true);
+      return;
+    }
+    setIsLogoutModalOpen(true);
   };
 
-  if (!hasToken) {
+  const finishLogout = () => {
+    setHasUnsavedChanges(false);
+    setIsLogoutModalOpen(false);
+    setIsUnsavedModalOpen(false);
+    logout();
+    showToast("Вы вышли", "success");
+  };
+
+  if (!isAuthenticated) {
     return (
       <Link href="/login" className="text-slate-600 transition-colors hover:text-slate-900">
         Вход
@@ -37,21 +42,31 @@ export function AuthNav() {
 
   return (
     <>
-      <button
-        className="text-slate-600 transition-colors hover:text-slate-900"
-        onClick={() => setIsModalOpen(true)}
-      >
+      <button className="text-slate-600 transition-colors hover:text-slate-900" onClick={startLogout}>
         Выйти
       </button>
 
       <ConfirmModal
-        open={isModalOpen}
-        title="Выход"
+        open={isUnsavedModalOpen}
+        title="Несохраненные изменения"
+        description="У вас есть несохранённые изменения. Выйти без сохранения?"
+        confirmText="Выйти без сохранения"
+        cancelText="Отмена"
+        onConfirm={() => {
+          setIsUnsavedModalOpen(false);
+          setIsLogoutModalOpen(true);
+        }}
+        onCancel={() => setIsUnsavedModalOpen(false)}
+      />
+
+      <ConfirmModal
+        open={isLogoutModalOpen}
+        title="Подтверждение выхода"
         description="Вы уверены, что хотите выйти?"
         confirmText="Подтвердить"
         cancelText="Отмена"
-        onConfirm={handleConfirmLogout}
-        onCancel={() => setIsModalOpen(false)}
+        onConfirm={finishLogout}
+        onCancel={() => setIsLogoutModalOpen(false)}
       />
     </>
   );

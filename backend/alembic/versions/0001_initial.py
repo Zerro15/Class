@@ -5,8 +5,9 @@ Revises:
 Create Date: 2024-01-12 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0001"
 down_revision = None

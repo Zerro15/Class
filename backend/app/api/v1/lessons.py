@@ -115,7 +115,10 @@ def create_payment(
 ) -> PaymentOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     if lesson.payment:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment already exists",
+        )
     payment = Payment(
         lesson_id=lesson.id,
         is_paid=payload.is_paid,
@@ -148,7 +151,11 @@ def update_payment(
     return payment
 
 
-@router.post("/{lesson_id}/homework", response_model=HomeworkOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{lesson_id}/homework",
+    response_model=HomeworkOut,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_homework(
     lesson_id: int,
     payload: HomeworkCreate,
@@ -157,7 +164,10 @@ def create_homework(
 ) -> HomeworkOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
     if lesson.homework:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Homework already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Homework already exists",
+        )
     homework = Homework(
         lesson_id=lesson.id,
         text=payload.text,
