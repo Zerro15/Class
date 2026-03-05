@@ -4,30 +4,27 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 
 type ToastType = "success" | "error";
 
-interface ToastItem {
+type Toast = {
   id: number;
   message: string;
   type: ToastType;
-}
+};
 
-interface ToastContextValue {
-  // Комментарий наставника: единая функция showToast упрощает показ уведомлений из любых клиентских компонентов.
+type ToastContextValue = {
   showToast: (message: string, type?: ToastType) => void;
-}
+};
 
-const ToastContext = createContext<ToastContextValue | null>(null);
+const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType = "success") => {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
-
-    // Комментарий наставника: авто-скрытие через таймер не заставляет пользователя вручную закрывать каждое уведомление.
-    window.setTimeout(() => {
+    setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3000);
+    }, 2400);
   }, []);
 
   const value = useMemo(() => ({ showToast }), [showToast]);
@@ -35,12 +32,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-80 flex-col gap-2">
+      <div className="fixed right-4 top-4 z-50 space-y-2">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`rounded-xl px-4 py-3 text-sm text-white shadow-lg transition-all duration-200 ${
-              toast.type === "error" ? "bg-rose-600" : "bg-emerald-600"
+            className={`rounded-md px-4 py-2 text-sm text-white shadow ${
+              toast.type === "success" ? "bg-emerald-600" : "bg-red-600"
             }`}
           >
             {toast.message}
@@ -54,7 +51,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error("useToast должен использоваться внутри ToastProvider");
+    throw new Error("useToast нужно использовать внутри ToastProvider");
   }
   return context;
 }
