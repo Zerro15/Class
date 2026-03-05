@@ -52,6 +52,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <main className="px-4 py-8 text-center text-sm text-slate-500">Проверяем сессию...</main>;
   }
 
+  const navBaseClass = "inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900";
+  const activeNavClass = "bg-slate-100 text-slate-900";
+  const studentsActive = pathname.startsWith("/students");
+  const dashboardActive = pathname.startsWith("/dashboard");
+  const financeActive = pathname.startsWith("/finance");
+
   return (
     <div className="min-h-screen">
       <header className="border-b bg-white">
@@ -60,13 +66,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ClassFlow
           </Link>
           <nav className="flex gap-2 text-sm">
-            <Link href="/students" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <Link href="/students" className={`${navBaseClass} ${studentsActive ? activeNavClass : ""}`}>
               Ученики
             </Link>
-            <Link href="/dashboard" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <Link href="/dashboard" className={`${navBaseClass} ${dashboardActive ? activeNavClass : ""}`}>
               Дашборд
             </Link>
-            <Link href="/finance" className="inline-flex h-9 items-center justify-center rounded-md px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+            <Link href="/finance" className={`${navBaseClass} ${financeActive ? activeNavClass : ""}`}>
               Финансы
             </Link>
             <AuthNav />
