@@ -20,7 +20,7 @@ class LessonBase(BaseModel):
 
 
 class LessonCreate(LessonBase):
-    pass
+    series_id: int | None = None
 
 
 class LessonUpdate(BaseModel):
@@ -31,6 +31,7 @@ class LessonUpdate(BaseModel):
     topic: str | None = None
     price: float | None = Field(None, ge=0)
     is_archived: bool | None = None
+    apply_to_future: bool = False
 
 
 class LessonOut(BaseModel):
@@ -43,14 +44,10 @@ class LessonOut(BaseModel):
     price: float
     tax_percent: float
     is_archived: bool
-<<<<<<< HEAD
-    series_id: int | None
-=======
     student_name: str | None = None
     is_paid: bool | None = None
     is_homework_sent: bool | None = None
     series_id: int | None = None
->>>>>>> origin/codex/implement-new-sidebar-layout-and-calendar-page
 
     class Config:
         from_attributes = True
