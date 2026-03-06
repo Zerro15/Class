@@ -40,7 +40,18 @@ def list_lessons(
         query = query.filter(Lesson.start_at >= from_date)
     if to_date:
         query = query.filter(Lesson.start_at <= to_date)
-    return query.order_by(Lesson.start_at.asc()).all()
+    lessons = query.order_by(Lesson.start_at.asc()).all()
+    # Комментарий наставника: добавляем student_name/is_paid/is_homework_sent на backend, чтобы календарь не делал N+1 запросы по каждой карточке.
+    student_map = {
+        row.id: row.name
+        for row in db.query(Student.id, Student.name).filter(Student.owner_id == current_user.id).all()
+    }
+    for lesson in lessons:
+        lesson.student_name = student_map.get(lesson.student_id)
+        lesson.is_paid = lesson.payment.is_paid if lesson.payment else None
+        lesson.is_homework_sent = lesson.homework.is_sent if lesson.homework else None
+        lesson.series_id = None
+    return lessons
 
 
 @router.get("/{lesson_id}", response_model=LessonOut)
@@ -91,6 +102,15 @@ def update_lesson(
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    if payload.student_id is not None:
+        student = (
+            db.query(Student)
+            .filter(Student.id == payload.student_id, Student.owner_id == current_user.id)
+            .first()
+        )
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+        lesson.student_id = payload.student_id
     if payload.start_at is not None:
         lesson.start_at = payload.start_at
     if payload.duration_min is not None:
@@ -101,6 +121,8 @@ def update_lesson(
         lesson.topic = payload.topic
     if payload.price is not None:
         lesson.price = payload.price
+    if payload.is_archived is not None:
+        lesson.is_archived = payload.is_archived
     db.commit()
     db.refresh(lesson)
     return lesson
@@ -121,6 +143,9 @@ def create_payment(
         is_paid=payload.is_paid,
         paid_amount=payload.paid_amount,
         paid_at=payload.paid_at,
+        is_transferred=payload.is_transferred,
+        transferred_amount=payload.transferred_amount,
+        transferred_at=payload.transferred_at,
     )
     db.add(payment)
     db.commit()
@@ -143,6 +168,9 @@ def update_payment(
     payment.is_paid = payload.is_paid
     payment.paid_amount = payload.paid_amount
     payment.paid_at = payload.paid_at
+    payment.is_transferred = payload.is_transferred
+    payment.transferred_amount = payload.transferred_amount
+    payment.transferred_at = payload.transferred_at
     db.commit()
     db.refresh(payment)
     return payment

@@ -7,6 +7,9 @@ class PaymentBase(BaseModel):
     is_paid: bool = False
     paid_amount: float = Field(0, ge=0)
     paid_at: datetime | None = None
+    is_transferred: bool = False
+    transferred_amount: float = Field(0, ge=0)
+    transferred_at: datetime | None = None
 
 
 class PaymentCreate(PaymentBase):

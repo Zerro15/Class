@@ -13,3 +13,20 @@ def test_register_and_login(client: TestClient) -> None:
     response = client.post("/api/v1/auth/login", json={"email": "user1@example.com", "password": "secret123"})
     assert response.status_code == 200
     assert response.json()["access_token"]
+
+
+def test_auth_me_success(client: TestClient) -> None:
+    token = register_user(client, "me-success@example.com")
+
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["email"] == "me-success@example.com"
+    assert isinstance(payload["id"], int)
+
+
+def test_auth_me_unauthorized(client: TestClient) -> None:
+    response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401

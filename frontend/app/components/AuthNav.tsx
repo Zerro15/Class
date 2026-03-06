@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { tokenStorage } from "@/lib/api";
 import { ConfirmModal } from "@/app/components/ConfirmModal";
 import { useToast } from "@/app/components/ToastProvider";
+import { Button } from "@/components/ui/button";
+import { clearToken, getToken } from "@/lib/api";
 
 export function AuthNav() {
   const router = useRouter();
@@ -16,11 +17,11 @@ export function AuthNav() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    setHasToken(Boolean(tokenStorage.get()));
+    setHasToken(Boolean(getToken()));
   }, []);
 
   const handleConfirmLogout = () => {
-    tokenStorage.clear();
+    clearToken();
     setHasToken(false);
     setIsModalOpen(false);
     showToast("Вы вышли", "success");
@@ -29,7 +30,7 @@ export function AuthNav() {
 
   if (!hasToken) {
     return (
-      <Link href="/login" className="text-slate-600 transition-colors hover:text-slate-900">
+      <Link href="/login" className="inline-flex h-9 items-center justify-center rounded-md px-4 py-2 text-sm font-normal text-slate-600 hover:bg-slate-100 hover:text-slate-900">
         Вход
       </Link>
     );
@@ -37,12 +38,14 @@ export function AuthNav() {
 
   return (
     <>
-      <button
-        className="text-slate-600 transition-colors hover:text-slate-900"
+      <Button
+        variant="ghost"
+        size="default"
+        className="text-sm font-normal text-slate-600 hover:text-slate-900"
         onClick={() => setIsModalOpen(true)}
       >
-        Выйти
-      </button>
+        Выход
+      </Button>
 
       <ConfirmModal
         open={isModalOpen}
