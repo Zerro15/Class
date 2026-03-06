@@ -19,3 +19,4 @@ class Student(Base):
 
     owner = relationship("User", back_populates="students")
     lessons = relationship("Lesson", back_populates="student", cascade="all, delete")
+    lesson_series = relationship("LessonSeries", cascade="all, delete")
