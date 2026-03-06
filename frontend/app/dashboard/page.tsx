@@ -24,6 +24,7 @@ interface LessonSeries { id: number; student_id: number; weekday: number; time_o
 
 const badgeBase = "rounded-full border px-2.5 py-1 text-xs font-medium";
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const STATUS_LABELS: Record<Lesson["status"], string> = { scheduled: "Запланировано", done: "Проведено", canceled: "Отменено" };
 
 export default function DashboardPage() {
   const [items, setItems] = useState<Lesson[]>([]);
@@ -174,7 +175,7 @@ export default function DashboardPage() {
       const saving = savingLessonId === lesson.id;
       return <div key={lesson.id} className="rounded-xl border bg-white p-4">
         <div className="flex flex-wrap justify-between gap-2"><div><p className="font-medium">{studentsMap.get(lesson.student_id) ?? `Ученик #${lesson.student_id}`}</p><p className="text-sm text-slate-600">{new Date(lesson.start_at).toLocaleString("ru-RU")} · {lesson.duration_min} мин · {lesson.price}₽</p></div>
-          <div className="flex items-center gap-2"><span className={`${badgeBase} border-slate-200`}>{lesson.status}</span>{lesson.series_id ? <span className={`${badgeBase} border-indigo-200 bg-indigo-50 text-indigo-700`}>Постоянное</span> : null}</div></div>
+          <div className="flex items-center gap-2"><span className={`${badgeBase} border-slate-200`}>{STATUS_LABELS[lesson.status]}</span>{lesson.series_id ? <span className={`${badgeBase} border-indigo-200 bg-indigo-50 text-indigo-700`}>Постоянное</span> : null}</div></div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => openEdit(lesson)} disabled={saving}>Редактировать</Button>
           <Button disabled={saving} onClick={() => void safeAction(lesson.id, async () => { await api.updateLesson(lesson.id, { status: "done" }); })}>Проведено</Button>

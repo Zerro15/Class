@@ -101,6 +101,68 @@ def delete_series(
     db.commit()
 
 
+
+
+@router.post("/{series_id}/apply-schedule", response_model=ApplyScheduleResponse)
+def apply_series_schedule(
+    series_id: int,
+    payload: ApplyScheduleRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApplyScheduleResponse:
+    series = (
+        db.query(LessonSeries)
+        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == current_user.id)
+        .first()
+    )
+    if not series:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+
+    days = payload.days if payload else 7
+    week_start_date = payload.week_start if payload else datetime.now(timezone.utc).date()
+    week_start = datetime.combine(week_start_date, time.min, tzinfo=timezone.utc)
+    settings = db.query(Settings).filter(Settings.owner_id == current_user.id).first()
+    tax_percent = settings.tax_percent_default if settings else 0.0
+
+    created = 0
+    skipped = 0
+    for current in (week_start + timedelta(days=idx) for idx in range(days)):
+        if current.weekday() != series.weekday:
+            continue
+        slot = datetime.combine(current.date(), series.time_of_day, tzinfo=timezone.utc)
+        duplicate = (
+            db.query(Lesson)
+            .filter(
+                Lesson.owner_id == current_user.id,
+                Lesson.student_id == series.student_id,
+                Lesson.start_at >= slot - timedelta(minutes=1),
+                Lesson.start_at <= slot + timedelta(minutes=1),
+            )
+            .first()
+        )
+        if duplicate:
+            skipped += 1
+            continue
+
+        db.add(
+            Lesson(
+                owner_id=current_user.id,
+                student_id=series.student_id,
+                start_at=slot,
+                duration_min=series.duration_min,
+                status="scheduled",
+                topic=series.topic,
+                price=series.price,
+                tax_percent=tax_percent,
+                series_id=series.id,
+            )
+        )
+        created += 1
+
+    db.commit()
+    return ApplyScheduleResponse(created=created, skipped=skipped)
+
+
 @schedule_router.post("/apply", response_model=ApplyScheduleResponse)
 def apply_schedule(
     payload: ApplyScheduleRequest,

@@ -154,16 +154,55 @@ export interface UserSettings {
 
 export interface LessonSeriesItem {
   id: number;
-  owner_id: number;
+  owner_id?: number;
   student_id: number;
   weekday: number;
   start_time: string;
+  time_of_day: string;
   duration_min: number;
   topic: string | null;
   price: number;
-  start_date: string;
-  end_date: string | null;
-  created_at: string;
+  is_active: boolean;
+  start_date?: string;
+  end_date?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+type RawLessonSeriesItem = Omit<LessonSeriesItem, "start_time" | "time_of_day" | "is_active"> & {
+  start_time?: string;
+  time_of_day?: string;
+  is_active?: boolean;
+};
+
+type LessonSeriesWritePayload = {
+  student_id: number;
+  weekday: number;
+  duration_min: number;
+  topic: string | null;
+  price: number;
+  is_active?: boolean;
+  start_time?: string;
+  time_of_day?: string;
+};
+
+function normalizeLessonSeries(item: RawLessonSeriesItem): LessonSeriesItem {
+  const normalizedTime = item.time_of_day ?? item.start_time ?? "00:00:00";
+  return {
+    ...item,
+    start_time: normalizedTime,
+    time_of_day: normalizedTime,
+    is_active: item.is_active ?? true,
+  };
+}
+
+function toSeriesApiPayload(payload: Partial<LessonSeriesWritePayload>) {
+  const normalizedTime = payload.time_of_day ?? payload.start_time;
+  return {
+    ...payload,
+    time_of_day: normalizedTime,
+    start_time: normalizedTime,
+  };
 }
 
 export interface FinanceFilters {
@@ -323,32 +362,45 @@ export const api = {
     });
   },
   listLessonSeries() {
-    return request<LessonSeriesItem[]>("/api/v1/lesson-series");
+    return request<RawLessonSeriesItem[]>("/api/v1/lesson-series").then((items) => items.map(normalizeLessonSeries));
   },
-  createLessonSeries(payload: {
-    student_id: number;
-    weekday: number;
-    start_time: string;
-    duration_min: number;
-    topic: string | null;
-    price: number;
-    start_date: string;
-    end_date: string | null;
-  }) {
-    return request<LessonSeriesItem>("/api/v1/lesson-series", {
+  createLessonSeries(payload: LessonSeriesWritePayload) {
+    // Комментарий наставника: адаптер принимает оба варианта времени (start_time и time_of_day), чтобы dashboard UI не зависел от конкретного бэкенд-формата.
+    return request<RawLessonSeriesItem>("/api/v1/lesson-series", {
       method: "POST",
-      body: JSON.stringify(payload),
-    });
+      body: JSON.stringify(toSeriesApiPayload(payload)),
+    }).then(normalizeLessonSeries);
   },
-  updateLessonSeries(id: number, payload: Partial<Omit<LessonSeriesItem, "id" | "owner_id" | "created_at">> & { apply_to_future?: boolean }) {
-    return request<LessonSeriesItem>(`/api/v1/lesson-series/${id}`, {
+  updateLessonSeries(id: number, payload: Partial<LessonSeriesWritePayload> & { apply_to_future?: boolean }) {
+    return request<RawLessonSeriesItem>(`/api/v1/lesson-series/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toSeriesApiPayload(payload)),
+    }).then(normalizeLessonSeries);
+  },
+  applySeriesPatch(
+    id: number,
+    payload: { from_start_at: string; patch: { duration_min?: number; topic?: string | null; price?: number }; also_update_series_template?: boolean },
+  ) {
+    return api.updateLessonSeries(id, payload.patch as Partial<LessonSeriesWritePayload>);
+  },
+  async applySchedule(payload: { week_start: string; days: number; strategy: "skip_existing" }) {
+    const seriesItems = await api.listLessonSeries();
+    const activeSeries = seriesItems.filter((item) => item.is_active);
+    const results = await Promise.all(activeSeries.map((item) => api.applySeriesSchedule(item.id, payload.week_start)));
+    return {
+      created: results.reduce((sum, item) => sum + item.created, 0),
+      skipped: results.reduce((sum, item) => sum + item.skipped, 0),
+    };
+  },
+  applySeriesSchedule(id: number, weekStart?: string) {
+    return request<{ created: number; skipped: number }>(`/api/v1/lesson-series/${id}/apply-schedule`, {
+      method: "POST",
+      ...(weekStart ? { body: JSON.stringify({ week_start: weekStart, days: 7, strategy: "skip_existing" }) } : {}),
     });
   },
-  applySeriesSchedule(id: number) {
-    return request<{ created: number }>(`/api/v1/lesson-series/${id}/apply-schedule`, {
-      method: "POST",
+  deleteLessonSeries(id: number) {
+    return request<void>(`/api/v1/lesson-series/${id}`, {
+      method: "DELETE",
     });
   },
 };
