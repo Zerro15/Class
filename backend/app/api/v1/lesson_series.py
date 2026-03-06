@@ -121,3 +121,17 @@ def apply_schedule(
 
     db.commit()
     return {"created": created}
+
+
+@router.delete("/{series_id}", response_model=dict[str, bool])
+def delete_series(
+    series_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, bool]:
+    series = _get_series_or_404(db, series_id, current_user.id)
+    # Комментарий наставника: удаляем правило серии отдельно от уже созданных уроков, чтобы не терять историю занятий и финансовые записи.
+    db.query(Lesson).filter(Lesson.owner_id == current_user.id, Lesson.series_id == series.id).update({"series_id": None})
+    db.delete(series)
+    db.commit()
+    return {"ok": True}

@@ -279,3 +279,49 @@ def test_lesson_series_apply_schedule(client: TestClient) -> None:
     )
     assert apply_resp.status_code == 200
     assert apply_resp.json()["created"] >= 1
+
+
+def test_lesson_series_delete_rule_keeps_lessons(client: TestClient) -> None:
+    token = register_user(client, "series-delete@example.com")
+    student_resp = client.post(
+        "/api/v1/students",
+        headers=auth_headers(token),
+        json={"name": "Series Delete Student", "notes": None},
+    )
+    student_id = student_resp.json()["id"]
+
+    series_resp = client.post(
+        "/api/v1/lesson-series",
+        headers=auth_headers(token),
+        json={
+            "student_id": student_id,
+            "weekday": 1,
+            "start_time": "11:00:00",
+            "duration_min": 60,
+            "topic": "Recurring Delete",
+            "price": 90,
+            "start_date": datetime.now(timezone.utc).date().isoformat(),
+            "end_date": (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat(),
+        },
+    )
+    assert series_resp.status_code == 201
+    series_id = series_resp.json()["id"]
+
+    apply_resp = client.post(
+        f"/api/v1/lesson-series/{series_id}/apply-schedule",
+        headers=auth_headers(token),
+    )
+    assert apply_resp.status_code == 200
+
+    lessons_before = client.get("/api/v1/lessons", headers=auth_headers(token))
+    assert lessons_before.status_code == 200
+    assert len(lessons_before.json()) >= 1
+
+    delete_resp = client.delete(f"/api/v1/lesson-series/{series_id}", headers=auth_headers(token))
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["ok"] is True
+
+    lessons_after = client.get("/api/v1/lessons", headers=auth_headers(token))
+    assert lessons_after.status_code == 200
+    assert len(lessons_after.json()) == len(lessons_before.json())
+    assert all(item["series_id"] is None for item in lessons_after.json())
