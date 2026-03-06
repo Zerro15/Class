@@ -25,6 +25,7 @@ app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(finance.router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router.router, prefix=settings.api_v1_prefix)
 app.include_router(lesson_series.router, prefix=settings.api_v1_prefix)
+app.include_router(lesson_series.schedule_router, prefix=settings.api_v1_prefix)
 
 
 @app.get(f"{settings.api_v1_prefix}/health")

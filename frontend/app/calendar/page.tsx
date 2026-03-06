@@ -7,8 +7,22 @@ import { api, LessonItem } from "@/lib/api";
 import { formatDayHeader, formatRangeTitle, getLessonPosition, getStartOfWeek, getWeekDays, toIsoLocal } from "@/lib/calendar";
 
 const HOUR_LABELS = Array.from({ length: 24 }).map((_, hour) => `${String(hour).padStart(2, "0")}:00`);
+const STATUS_STYLES: Record<LessonItem["status"], string> = {
+  scheduled: "border-blue-200 bg-blue-50 text-blue-900",
+  done: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  canceled: "border-rose-200 bg-rose-50 text-rose-800",
+};
+
+const VIEW_MODES = [
+  { value: "3days", label: "3 дня" },
+  { value: "week", label: "Неделя" },
+  { value: "month", label: "Месяц" },
+] as const;
+
+type CalendarViewMode = (typeof VIEW_MODES)[number]["value"];
 
 export default function CalendarPage() {
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
   const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,10 +32,25 @@ export default function CalendarPage() {
   const [createAt, setCreateAt] = useState<Date | null>(null);
   const [editLesson, setEditLesson] = useState<LessonItem | null>(null);
   const [moveLesson, setMoveLesson] = useState<LessonItem | null>(null);
-
   const [form, setForm] = useState({ student_id: "", topic: "", duration_min: "60", price: "0", status: "scheduled" });
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
+  const now = new Date();
+
+  const visibleDays = useMemo(() => {
+    if (viewMode === "3days") {
+      const start = new Date(weekStart);
+      const today = new Date();
+      const todayIndex = Math.min(6, Math.max(0, today.getDay() === 0 ? 6 : today.getDay() - 1));
+      start.setDate(weekStart.getDate() + Math.max(0, todayIndex - 1));
+      return Array.from({ length: 3 }).map((_, i) => {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        return d;
+      });
+    }
+    return weekDays;
+  }, [viewMode, weekDays, weekStart]);
 
   const loadLessons = useCallback(async () => {
     setLoading(true);
@@ -29,7 +58,7 @@ export default function CalendarPage() {
     try {
       const from = new Date(weekStart);
       const to = new Date(weekStart);
-      to.setDate(to.getDate() + 7);
+      to.setDate(to.getDate() + (viewMode === "month" ? 31 : 7));
       const [items, studentList] = await Promise.all([
         api.listLessons({ from: toIsoLocal(from), to: toIsoLocal(to) }),
         api.listStudents(),
@@ -41,22 +70,32 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [weekStart]);
+  }, [viewMode, weekStart]);
 
   useEffect(() => {
     void loadLessons();
   }, [loadLessons]);
 
   const byDay = useMemo(() => {
-    return weekDays.map((day) =>
+    return visibleDays.map((day) =>
       lessons.filter((lesson) => {
         const d = new Date(lesson.start_at);
         return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
       }),
     );
-  }, [lessons, weekDays]);
+  }, [lessons, visibleDays]);
 
-  const now = new Date();
+  const monthDays = useMemo(() => {
+    const start = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+    const end = new Date(weekStart.getFullYear(), weekStart.getMonth() + 1, 0);
+    const days: Date[] = [];
+    for (let day = 1; day <= end.getDate(); day += 1) {
+      days.push(new Date(start.getFullYear(), start.getMonth(), day));
+    }
+    return days;
+  }, [weekStart]);
+
+  const studentsMap = useMemo(() => new Map(students.map((s) => [s.id, s.name])), [students]);
   const isCurrentWeek = now >= weekStart && now <= new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
 
   const openCreateForSlot = (day: Date, hour: number) => {
@@ -102,63 +141,92 @@ export default function CalendarPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4">
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7))}>Назад</Button>
+          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - (viewMode === "month" ? 31 : 7)))}>Назад</Button>
           <Button variant="outline" onClick={() => setWeekStart(getStartOfWeek(new Date()))}>Сегодня</Button>
-          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7))}>Вперёд</Button>
+          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + (viewMode === "month" ? 31 : 7)))}>Вперёд</Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {VIEW_MODES.map((mode) => (
+            <button key={mode.value} onClick={() => setViewMode(mode.value)} className={`rounded-full px-3 py-1.5 text-sm ${viewMode === mode.value ? "bg-slate-900 text-white" : "border text-slate-700 hover:bg-slate-50"}`}>
+              {mode.label}
+            </button>
+          ))}
         </div>
         <h1 className="text-lg font-semibold text-slate-900">{formatRangeTitle(weekStart)}</h1>
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <div className="overflow-x-auto rounded-xl border bg-white">
-        <div className="grid min-w-[960px] grid-cols-[72px_repeat(7,minmax(0,1fr))]">
-          <div className="border-b border-r bg-slate-50" />
-          {weekDays.map((day) => {
-            const isToday = day.toDateString() === now.toDateString();
+
+      {viewMode === "month" ? (
+        <div className="grid gap-2 rounded-xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
+          {monthDays.map((day) => {
+            const dayLessons = lessons.filter((lesson) => new Date(lesson.start_at).toDateString() === day.toDateString());
             return (
-              <div key={day.toISOString()} className={`border-b px-2 py-3 text-center text-sm ${isToday ? "bg-blue-50 font-medium text-blue-700" : "bg-slate-50 text-slate-700"}`}>
-                {formatDayHeader(day)}
-              </div>
+              <button key={day.toISOString()} className="min-h-28 rounded-lg border p-2 text-left hover:bg-slate-50" onClick={() => openCreateForSlot(day, 10)}>
+                <p className="text-xs font-medium text-slate-500">{formatDayHeader(day)}</p>
+                <div className="mt-2 space-y-1">
+                  {dayLessons.slice(0, 3).map((lesson) => (
+                    <div key={lesson.id} className={`rounded border px-2 py-1 text-xs ${STATUS_STYLES[lesson.status]}`} onClick={(e) => { e.stopPropagation(); setEditLesson(lesson); }}>
+                      {new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} · {lesson.topic || "Без темы"}
+                    </div>
+                  ))}
+                </div>
+              </button>
             );
           })}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border bg-white">
+          <div className={`grid min-w-[960px] grid-cols-[72px_repeat(${visibleDays.length},minmax(0,1fr))]`}>
+            <div className="border-b border-r bg-slate-50" />
+            {visibleDays.map((day) => {
+              const isToday = day.toDateString() === now.toDateString();
+              return (
+                <div key={day.toISOString()} className={`border-b px-2 py-3 text-center text-sm ${isToday ? "bg-blue-50 font-medium text-blue-700" : "bg-slate-50 text-slate-700"}`}>
+                  {formatDayHeader(day)}
+                </div>
+              );
+            })}
 
-          <div className="relative border-r">
-            {HOUR_LABELS.map((label, hour) => (
-              <div key={label} className="h-16 border-b pr-2 pt-1 text-right text-xs text-slate-400">{hour > 0 ? label : ""}</div>
+            <div className="relative border-r">
+              {HOUR_LABELS.map((label, hour) => (
+                <div key={label} className="h-16 border-b pr-2 pt-1 text-right text-xs text-slate-400">{hour > 0 ? label : ""}</div>
+              ))}
+            </div>
+
+            {visibleDays.map((day, dayIndex) => (
+              <div key={day.toISOString()} className="relative border-r last:border-r-0">
+                {HOUR_LABELS.map((label, hour) => (
+                  <button key={`${day.toISOString()}-${label}`} className="h-16 w-full border-b hover:bg-slate-50" onClick={() => openCreateForSlot(day, hour)} />
+                ))}
+
+                {byDay[dayIndex].map((lesson) => {
+                  const { topPercent, heightPercent } = getLessonPosition(lesson.start_at, lesson.duration_min);
+                  return (
+                    <button
+                      key={lesson.id}
+                      className={`absolute left-1 right-1 rounded-md border p-1.5 text-left text-xs shadow-sm ${STATUS_STYLES[lesson.status]}`}
+                      style={{ top: `${topPercent}%`, minHeight: `${heightPercent}%` }}
+                      onClick={() => setEditLesson(lesson)}
+                    >
+                      {/* Комментарий наставника: в календаре статус кодируется цветом, чтобы карточка оставалась компактной и быстрее читалась по времени/теме. */}
+                      <p className="font-medium">{lesson.topic || "Без темы"}</p>
+                      <p>{studentsMap.get(lesson.student_id) || `Ученик #${lesson.student_id}`}</p>
+                      <p>{new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
+                      {lesson.is_paid ? <p className="text-[10px] opacity-70">Оплачено</p> : null}
+                    </button>
+                  );
+                })}
+
+                {isCurrentWeek && day.toDateString() === now.toDateString() ? (
+                  <div className="pointer-events-none absolute left-0 right-0 z-20 border-t border-red-400" style={{ top: `${((now.getHours() * 60 + now.getMinutes()) / (24 * 60)) * 100}%` }} />
+                ) : null}
+              </div>
             ))}
           </div>
-
-          {weekDays.map((day, dayIndex) => (
-            <div key={day.toISOString()} className="relative border-r last:border-r-0">
-              {HOUR_LABELS.map((label, hour) => (
-                <button key={`${day.toISOString()}-${label}`} className="h-16 w-full border-b hover:bg-slate-50" onClick={() => openCreateForSlot(day, hour)} />
-              ))}
-
-              {byDay[dayIndex].map((lesson) => {
-                const { topPercent, heightPercent } = getLessonPosition(lesson.start_at, lesson.duration_min);
-                return (
-                  <button
-                    key={lesson.id}
-                    className="absolute left-1 right-1 rounded-md border border-blue-200 bg-blue-50 p-2 text-left text-xs text-slate-700 shadow-sm"
-                    style={{ top: `${topPercent}%`, height: `${heightPercent}%` }}
-                    onClick={() => setEditLesson(lesson)}
-                  >
-                    <p className="font-semibold text-slate-800">{lesson.topic || "Без темы"}</p>
-                    <p>{lesson.student_name || `Ученик #${lesson.student_id}`}</p>
-                    <p>{new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
-                    <p>Статус: {lesson.status}</p>
-                    {lesson.series_id ? <span className="mt-1 inline-block rounded bg-violet-100 px-1 py-0.5 text-[10px] text-violet-700">Постоянное</span> : null}
-                  </button>
-                );
-              })}
-
-              {isCurrentWeek && day.toDateString() === now.toDateString() ? (
-                <div className="pointer-events-none absolute left-0 right-0 z-20 border-t border-red-400" style={{ top: `${((now.getHours() * 60 + now.getMinutes()) / (24 * 60)) * 100}%` }} />
-              ) : null}
-            </div>
-          ))}
         </div>
-      </div>
+      )}
 
       {loading ? <p className="text-sm text-slate-500">Загружаем уроки...</p> : null}
 
@@ -200,7 +268,6 @@ export default function CalendarPage() {
               <input className="rounded border px-3 py-2" type="number" value={editLesson.duration_min} onChange={(e) => setEditLesson({ ...editLesson, duration_min: Number(e.target.value) })} />
               <input className="rounded border px-3 py-2" type="number" value={editLesson.price} onChange={(e) => setEditLesson({ ...editLesson, price: Number(e.target.value) })} />
             </div>
-            {editLesson.series_id ? <p className="text-xs text-slate-500">Серия обнаружена, но массовое обновление пока не поддерживается текущим API.</p> : null}
             <div className="flex justify-between gap-2">
               <Button variant="outline" onClick={() => setMoveLesson(editLesson)}>Перенести</Button>
               <div className="flex gap-2">
@@ -212,9 +279,7 @@ export default function CalendarPage() {
         </div>
       ) : null}
 
-      {moveLesson ? (
-        <MoveModal lesson={moveLesson} onClose={() => setMoveLesson(null)} onSave={submitMove} />
-      ) : null}
+      {moveLesson ? <MoveModal lesson={moveLesson} onClose={() => setMoveLesson(null)} onSave={submitMove} /> : null}
     </div>
   );
 }
@@ -231,7 +296,6 @@ function MoveModal({ lesson, onClose, onSave }: { lesson: LessonItem; onClose: (
       <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
         <h3 className="text-lg font-semibold">Перенос урока</h3>
         <input className="w-full rounded border px-3 py-2" type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} />
-        {lesson.series_id ? <p className="text-xs text-slate-500">Для занятий из серии применяется перенос только текущего урока.</p> : null}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Отмена</Button>
           <Button onClick={() => void onSave(value)}>Сохранить</Button>
