@@ -245,3 +245,37 @@ def test_settings_get_and_update(client: TestClient) -> None:
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["default_lesson_duration_min"] == 90
+
+
+def test_lesson_series_apply_schedule(client: TestClient) -> None:
+    token = register_user(client, "series@example.com")
+    student_resp = client.post(
+        "/api/v1/students",
+        headers=auth_headers(token),
+        json={"name": "Series Student", "notes": None},
+    )
+    student_id = student_resp.json()["id"]
+
+    series_resp = client.post(
+        "/api/v1/lesson-series",
+        headers=auth_headers(token),
+        json={
+            "student_id": student_id,
+            "weekday": 1,
+            "start_time": "10:00:00",
+            "duration_min": 60,
+            "topic": "Recurring",
+            "price": 100,
+            "start_date": datetime.now(timezone.utc).date().isoformat(),
+            "end_date": (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat(),
+        },
+    )
+    assert series_resp.status_code == 201
+    series_id = series_resp.json()["id"]
+
+    apply_resp = client.post(
+        f"/api/v1/lesson-series/{series_id}/apply-schedule",
+        headers=auth_headers(token),
+    )
+    assert apply_resp.status_code == 200
+    assert apply_resp.json()["created"] >= 1

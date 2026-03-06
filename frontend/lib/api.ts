@@ -152,6 +152,20 @@ export interface UserSettings {
   timezone: string;
 }
 
+export interface LessonSeriesItem {
+  id: number;
+  owner_id: number;
+  student_id: number;
+  weekday: number;
+  start_time: string;
+  duration_min: number;
+  topic: string | null;
+  price: number;
+  start_date: string;
+  end_date: string | null;
+  created_at: string;
+}
+
 export interface FinanceFilters {
   from?: string;
   to?: string;
@@ -238,7 +252,8 @@ export const api = {
       is_archived: boolean;
     }>(`/api/v1/lessons/${id}`);
   },
-  updateLesson(id: number, payload: { status?: string; is_archived?: boolean; start_at?: string; duration_min?: number; topic?: string | null; price?: number }) {
+  // Комментарий наставника: payload объединяет поля из dashboard/calendar/recurring, чтобы один клиент не терял возможности после merge разных веток.
+  updateLesson(id: number, payload: { status?: string; is_archived?: boolean; start_at?: string; duration_min?: number; topic?: string | null; price?: number; student_id?: number; apply_to_future?: boolean }) {
     return request<{ id: number }>(`/api/v1/lessons/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -305,6 +320,35 @@ export const api = {
     return request<UserSettings>("/api/v1/settings", {
       method: "PUT",
       body: JSON.stringify(payload),
+    });
+  },
+  listLessonSeries() {
+    return request<LessonSeriesItem[]>("/api/v1/lesson-series");
+  },
+  createLessonSeries(payload: {
+    student_id: number;
+    weekday: number;
+    start_time: string;
+    duration_min: number;
+    topic: string | null;
+    price: number;
+    start_date: string;
+    end_date: string | null;
+  }) {
+    return request<LessonSeriesItem>("/api/v1/lesson-series", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLessonSeries(id: number, payload: Partial<Omit<LessonSeriesItem, "id" | "owner_id" | "created_at">> & { apply_to_future?: boolean }) {
+    return request<LessonSeriesItem>(`/api/v1/lesson-series/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  applySeriesSchedule(id: number) {
+    return request<{ created: number }>(`/api/v1/lesson-series/${id}/apply-schedule`, {
+      method: "POST",
     });
   },
 };

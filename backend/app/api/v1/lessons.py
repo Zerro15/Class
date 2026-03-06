@@ -50,7 +50,7 @@ def list_lessons(
         lesson.student_name = student_map.get(lesson.student_id)
         lesson.is_paid = lesson.payment.is_paid if lesson.payment else None
         lesson.is_homework_sent = lesson.homework.is_sent if lesson.homework else None
-        lesson.series_id = None
+        lesson.series_id = lesson.series_id
     return lessons
 
 
@@ -86,6 +86,7 @@ def create_lesson(
         status=payload.status.value,
         topic=payload.topic,
         price=payload.price,
+        series_id=payload.series_id,
         tax_percent=tax_percent,
     )
     db.add(lesson)
@@ -102,6 +103,15 @@ def update_lesson(
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    if payload.student_id is not None:
+        student = (
+            db.query(Student)
+            .filter(Student.id == payload.student_id, Student.owner_id == current_user.id)
+            .first()
+        )
+        if not student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+        lesson.student_id = payload.student_id
     if payload.start_at is not None:
         lesson.start_at = payload.start_at
     if payload.duration_min is not None:
@@ -114,6 +124,26 @@ def update_lesson(
         lesson.price = payload.price
     if payload.is_archived is not None:
         lesson.is_archived = payload.is_archived
+
+    if payload.apply_to_future and lesson.series_id is not None:
+        # Комментарий наставника: для recurring-изменений обновляем только будущие занятия серии, чтобы прошлые данные оставались исторически корректными.
+        future_lessons = db.query(Lesson).filter(
+            Lesson.owner_id == current_user.id,
+            Lesson.series_id == lesson.series_id,
+            Lesson.start_at >= lesson.start_at,
+            Lesson.id != lesson.id,
+        )
+        for item in future_lessons:
+            if payload.duration_min is not None:
+                item.duration_min = payload.duration_min
+            if payload.status is not None:
+                item.status = payload.status.value
+            if payload.topic is not None:
+                item.topic = payload.topic
+            if payload.price is not None:
+                item.price = payload.price
+            if payload.is_archived is not None:
+                item.is_archived = payload.is_archived
     db.commit()
     db.refresh(lesson)
     return lesson

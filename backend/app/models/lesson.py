@@ -12,6 +12,7 @@ class Lesson(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    series_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_series.id"), index=True)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     duration_min: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32))
@@ -25,5 +26,6 @@ class Lesson(Base):
 
     owner = relationship("User", back_populates="lessons")
     student = relationship("Student", back_populates="lessons")
+    series = relationship("LessonSeries", back_populates="lessons")
     payment = relationship("Payment", back_populates="lesson", uselist=False)
     homework = relationship("Homework", back_populates="lesson", uselist=False)

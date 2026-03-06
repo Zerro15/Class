@@ -1,7 +1,7 @@
-"""add settings profile fields
+"""add settings profile fields after lesson series
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0008
+Revises: 0007
 Create Date: 2026-03-06 00:00:00.000000
 """
 
@@ -9,13 +9,14 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0007"
-down_revision = "0006"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    # Комментарий наставника: эта миграция идёт после 0007 (series), чтобы цепочка оставалась линейной и предсказуемой при upgrade head.
     op.add_column("settings", sa.Column("default_lesson_duration_min", sa.Integer(), nullable=False, server_default="60"))
     op.add_column("settings", sa.Column("default_lesson_price", sa.Float(), nullable=False, server_default="0"))
     op.add_column("settings", sa.Column("workday_start", sa.String(length=5), nullable=False, server_default="09:00"))
