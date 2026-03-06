@@ -3,104 +3,121 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CalendarSidebar, CalendarToolbar, LessonCard, LessonFilter, MonthGrid } from "@/app/calendar/components/workspace";
 import { api, LessonItem } from "@/lib/api";
-import { formatDayHeader, formatRangeTitle, getLessonPosition, getStartOfWeek, getWeekDays, toIsoLocal } from "@/lib/calendar";
+import {
+  CalendarViewMode,
+  formatDayHeader,
+  formatRangeTitle,
+  getCalendarAnchor,
+  getLessonPosition,
+  getTimeGridLabels,
+  getVisibleDays,
+  minuteToLabel,
+  parseTimeToMinutes,
+  resolveVisibleRange,
+  shiftAnchor,
+  toIsoLocal,
+} from "@/lib/calendar";
 
-const HOUR_LABELS = Array.from({ length: 24 }).map((_, hour) => `${String(hour).padStart(2, "0")}:00`);
-const STATUS_STYLES: Record<LessonItem["status"], string> = {
-  scheduled: "border-blue-200 bg-blue-50 text-blue-900",
-  done: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  canceled: "border-rose-200 bg-rose-50 text-rose-800",
-};
-
-const VIEW_MODES = [
-  { value: "3days", label: "3 дня" },
-  { value: "week", label: "Неделя" },
-  { value: "month", label: "Месяц" },
-] as const;
-
-type CalendarViewMode = (typeof VIEW_MODES)[number]["value"];
+const DEFAULT_FORM = { student_id: "", topic: "", duration_min: "60", price: "0", status: "scheduled" };
 
 export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
-  const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));
+  const [anchorDate, setAnchorDate] = useState(() => getCalendarAnchor(new Date(), "week"));
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [students, setStudents] = useState<Array<{ id: number; name: string }>>([]);
+  const [workdayStart, setWorkdayStart] = useState(8 * 60);
+  const [workdayEnd, setWorkdayEnd] = useState(20 * 60);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [lessonFilter, setLessonFilter] = useState<LessonFilter>("all");
+  const [studentFilter, setStudentFilter] = useState<string>("all");
 
   const [createAt, setCreateAt] = useState<Date | null>(null);
   const [editLesson, setEditLesson] = useState<LessonItem | null>(null);
   const [moveLesson, setMoveLesson] = useState<LessonItem | null>(null);
-  const [form, setForm] = useState({ student_id: "", topic: "", duration_min: "60", price: "0", status: "scheduled" });
+  const [form, setForm] = useState(DEFAULT_FORM);
 
-  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
-  const now = new Date();
-
-  const visibleDays = useMemo(() => {
-    if (viewMode === "3days") {
-      const start = new Date(weekStart);
-      const today = new Date();
-      const todayIndex = Math.min(6, Math.max(0, today.getDay() === 0 ? 6 : today.getDay() - 1));
-      start.setDate(weekStart.getDate() + Math.max(0, todayIndex - 1));
-      return Array.from({ length: 3 }).map((_, i) => {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        return d;
-      });
-    }
-    return weekDays;
-  }, [viewMode, weekDays, weekStart]);
+  const visibleDays = useMemo(() => getVisibleDays(anchorDate, viewMode), [anchorDate, viewMode]);
+  const title = useMemo(() => formatRangeTitle(anchorDate, viewMode), [anchorDate, viewMode]);
 
   const loadLessons = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const from = new Date(weekStart);
-      const to = new Date(weekStart);
-      to.setDate(to.getDate() + (viewMode === "month" ? 31 : 7));
-      const [items, studentList] = await Promise.all([
+      const from = new Date(anchorDate);
+      const to = new Date(anchorDate);
+      if (viewMode === "month") {
+        to.setMonth(to.getMonth() + 1);
+      } else if (viewMode === "week") {
+        to.setDate(to.getDate() + 7);
+      } else if (viewMode === "3days") {
+        to.setDate(to.getDate() + 3);
+      } else {
+        to.setDate(to.getDate() + 1);
+      }
+
+      const [items, studentList, settings] = await Promise.all([
         api.listLessons({ from: toIsoLocal(from), to: toIsoLocal(to) }),
         api.listStudents(),
+        api.getSettings(),
       ]);
       setLessons(items);
       setStudents(studentList.map((x) => ({ id: x.id, name: x.name })));
+      setWorkdayStart(parseTimeToMinutes(settings.workday_start, 8 * 60));
+      setWorkdayEnd(parseTimeToMinutes(settings.workday_end, 20 * 60));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка загрузки календаря");
     } finally {
       setLoading(false);
     }
-  }, [viewMode, weekStart]);
+  }, [anchorDate, viewMode]);
 
   useEffect(() => {
     void loadLessons();
   }, [loadLessons]);
 
-  const byDay = useMemo(() => {
-    return visibleDays.map((day) =>
-      lessons.filter((lesson) => {
-        const d = new Date(lesson.start_at);
-        return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
-      }),
-    );
-  }, [lessons, visibleDays]);
+  useEffect(() => {
+    setAnchorDate((prev) => getCalendarAnchor(prev, viewMode));
+  }, [viewMode]);
 
-  const monthDays = useMemo(() => {
-    const start = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
-    const end = new Date(weekStart.getFullYear(), weekStart.getMonth() + 1, 0);
-    const days: Date[] = [];
-    for (let day = 1; day <= end.getDate(); day += 1) {
-      days.push(new Date(start.getFullYear(), start.getMonth(), day));
+  const studentsMap = useMemo(() => new Map(students.map((student) => [student.id, student.name])), [students]);
+
+  const filteredLessons = useMemo(() => {
+    return lessons.filter((lesson) => {
+      if (lessonFilter !== "all" && lesson.status !== lessonFilter) return false;
+      if (studentFilter !== "all" && lesson.student_id !== Number(studentFilter)) return false;
+      return true;
+    });
+  }, [lessonFilter, lessons, studentFilter]);
+
+  const lessonsByDay = useMemo(() => {
+    const map = new Map<string, LessonItem[]>();
+    for (const lesson of filteredLessons) {
+      const key = new Date(lesson.start_at).toDateString();
+      const list = map.get(key) ?? [];
+      list.push(lesson);
+      map.set(key, list);
     }
-    return days;
-  }, [weekStart]);
+    return map;
+  }, [filteredLessons]);
 
-  const studentsMap = useMemo(() => new Map(students.map((s) => [s.id, s.name])), [students]);
-  const isCurrentWeek = now >= weekStart && now <= new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
+  const visibleRange = useMemo(() => {
+    if (viewMode === "month") return { startMinute: 0, endMinute: 24 * 60 };
+    const scopedLessons = visibleDays.flatMap((day) => lessonsByDay.get(day.toDateString()) ?? []);
+    // Комментарий наставника: показываем рабочий диапазон + уроки рядом, чтобы убрать пустую ночную прокрутку и сохранить контекст занятий вне диапазона.
+    return resolveVisibleRange({ workdayStart, workdayEnd, lessons: scopedLessons });
+  }, [lessonsByDay, viewMode, visibleDays, workdayEnd, workdayStart]);
 
-  const openCreateForSlot = (day: Date, hour: number) => {
+  const timeLabels = useMemo(() => getTimeGridLabels(visibleRange.startMinute, visibleRange.endMinute, 60), [visibleRange]);
+
+  const openCreateForSlot = (day: Date, minute: number) => {
     const slot = new Date(day);
-    slot.setHours(hour, 0, 0, 0);
+    slot.setHours(Math.floor(minute / 60), minute % 60, 0, 0);
+    setForm(DEFAULT_FORM);
     setCreateAt(slot);
   };
 
@@ -137,149 +154,238 @@ export default function CalendarPage() {
     await loadLessons();
   };
 
+  const monthDays = useMemo(() => {
+    if (viewMode !== "month") return [];
+    const start = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+    const end = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0);
+    return Array.from({ length: end.getDate() }).map((_, i) => {
+      const day = new Date(start);
+      day.setDate(i + 1);
+      return day;
+    });
+  }, [anchorDate, viewMode]);
+
+  const now = new Date();
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - (viewMode === "month" ? 31 : 7)))}>Назад</Button>
-          <Button variant="outline" onClick={() => setWeekStart(getStartOfWeek(new Date()))}>Сегодня</Button>
-          <Button variant="outline" onClick={() => setWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + (viewMode === "month" ? 31 : 7)))}>Вперёд</Button>
-        </div>
+    <div className="space-y-3">
+      <CalendarToolbar
+        title={title}
+        viewMode={viewMode}
+        onViewMode={setViewMode}
+        onPrev={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, -1))}
+        onNext={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, 1))}
+        onToday={() => setAnchorDate(getCalendarAnchor(new Date(), viewMode))}
+        onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+        onCreate={() => openCreateForSlot(new Date(), workdayStart)}
+      />
 
-        <div className="flex items-center gap-2">
-          {VIEW_MODES.map((mode) => (
-            <button key={mode.value} onClick={() => setViewMode(mode.value)} className={`rounded-full px-3 py-1.5 text-sm ${viewMode === mode.value ? "bg-slate-900 text-white" : "border text-slate-700 hover:bg-slate-50"}`}>
-              {mode.label}
-            </button>
-          ))}
-        </div>
-        <h1 className="text-lg font-semibold text-slate-900">{formatRangeTitle(weekStart)}</h1>
-      </div>
+      <div className="flex gap-3">
+        <CalendarSidebar
+          isCollapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((prev) => !prev)}
+          selectedDate={anchorDate}
+          students={students}
+          selectedStudentId={studentFilter}
+          onStudent={setStudentFilter}
+          lessonFilter={lessonFilter}
+          onLessonFilter={setLessonFilter}
+          onDatePick={(date) => setAnchorDate(getCalendarAnchor(date, viewMode))}
+          onCreate={() => openCreateForSlot(new Date(), workdayStart)}
+        />
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      {viewMode === "month" ? (
-        <div className="grid gap-2 rounded-xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
-          {monthDays.map((day) => {
-            const dayLessons = lessons.filter((lesson) => new Date(lesson.start_at).toDateString() === day.toDateString());
-            return (
-              <button key={day.toISOString()} className="min-h-28 rounded-lg border p-2 text-left hover:bg-slate-50" onClick={() => openCreateForSlot(day, 10)}>
-                <p className="text-xs font-medium text-slate-500">{formatDayHeader(day)}</p>
-                <div className="mt-2 space-y-1">
-                  {dayLessons.slice(0, 3).map((lesson) => (
-                    <div key={lesson.id} className={`rounded border px-2 py-1 text-xs ${STATUS_STYLES[lesson.status]}`} onClick={(e) => { e.stopPropagation(); setEditLesson(lesson); }}>
-                      {new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} · {lesson.topic || "Без темы"}
-                    </div>
-                  ))}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border bg-white">
-          <div className={`grid min-w-[960px] grid-cols-[72px_repeat(${visibleDays.length},minmax(0,1fr))]`}>
-            <div className="border-b border-r bg-slate-50" />
-            {visibleDays.map((day) => {
-              const isToday = day.toDateString() === now.toDateString();
-              return (
-                <div key={day.toISOString()} className={`border-b px-2 py-3 text-center text-sm ${isToday ? "bg-blue-50 font-medium text-blue-700" : "bg-slate-50 text-slate-700"}`}>
-                  {formatDayHeader(day)}
-                </div>
-              );
-            })}
-
-            <div className="relative border-r">
-              {HOUR_LABELS.map((label, hour) => (
-                <div key={label} className="h-16 border-b pr-2 pt-1 text-right text-xs text-slate-400">{hour > 0 ? label : ""}</div>
-              ))}
-            </div>
-
-            {visibleDays.map((day, dayIndex) => (
-              <div key={day.toISOString()} className="relative border-r last:border-r-0">
-                {HOUR_LABELS.map((label, hour) => (
-                  <button key={`${day.toISOString()}-${label}`} className="h-16 w-full border-b hover:bg-slate-50" onClick={() => openCreateForSlot(day, hour)} />
-                ))}
-
-                {byDay[dayIndex].map((lesson) => {
-                  const { topPercent, heightPercent } = getLessonPosition(lesson.start_at, lesson.duration_min);
+        <div className="min-w-0 flex-1 rounded-xl border bg-white p-3">
+          {error ? <p className="mb-2 text-sm text-rose-600">{error}</p> : null}
+          {viewMode === "month" ? (
+            <MonthGrid
+              days={monthDays}
+              lessonsByDay={lessonsByDay}
+              onCreate={(day) => openCreateForSlot(day, workdayStart)}
+              onOpenLesson={(lessonId) => {
+                const found = filteredLessons.find((lesson) => lesson.id === lessonId);
+                if (found) setEditLesson(found);
+              }}
+              studentsMap={studentsMap}
+            />
+          ) : (
+            <div className="overflow-auto rounded-lg border">
+              <div className={`grid min-w-[840px] grid-cols-[72px_repeat(${visibleDays.length},minmax(0,1fr))]`}>
+                <div className="sticky left-0 top-0 z-30 border-b border-r bg-slate-50" />
+                {visibleDays.map((day) => {
+                  const isToday = day.toDateString() === now.toDateString();
                   return (
-                    <button
-                      key={lesson.id}
-                      className={`absolute left-1 right-1 rounded-md border p-1.5 text-left text-xs shadow-sm ${STATUS_STYLES[lesson.status]}`}
-                      style={{ top: `${topPercent}%`, minHeight: `${heightPercent}%` }}
-                      onClick={() => setEditLesson(lesson)}
+                    <div
+                      key={day.toISOString()}
+                      className={`sticky top-0 z-20 border-b px-2 py-2 text-center text-sm ${isToday ? "bg-blue-50 font-semibold text-blue-700" : "bg-slate-50 text-slate-700"}`}
                     >
-                      {/* Комментарий наставника: в календаре статус кодируется цветом, чтобы карточка оставалась компактной и быстрее читалась по времени/теме. */}
-                      <p className="font-medium">{lesson.topic || "Без темы"}</p>
-                      <p>{studentsMap.get(lesson.student_id) || `Ученик #${lesson.student_id}`}</p>
-                      <p>{new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
-                      {lesson.is_paid ? <p className="text-[10px] opacity-70">Оплачено</p> : null}
-                    </button>
+                      {formatDayHeader(day)}
+                    </div>
                   );
                 })}
 
-                {isCurrentWeek && day.toDateString() === now.toDateString() ? (
-                  <div className="pointer-events-none absolute left-0 right-0 z-20 border-t border-red-400" style={{ top: `${((now.getHours() * 60 + now.getMinutes()) / (24 * 60)) * 100}%` }} />
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                <div className="sticky left-0 z-20 border-r bg-white">
+                  {timeLabels.map((minute) => (
+                    <div key={minute} className="h-16 border-b pr-2 pt-1 text-right text-xs text-slate-400">
+                      {minuteToLabel(minute)}
+                    </div>
+                  ))}
+                </div>
 
-      {loading ? <p className="text-sm text-slate-500">Загружаем уроки...</p> : null}
+                {visibleDays.map((day) => {
+                  const dayLessons = lessonsByDay.get(day.toDateString()) ?? [];
+                  return (
+                    <div key={day.toISOString()} className="relative border-r last:border-r-0">
+                      {timeLabels.map((minute) => (
+                        <button
+                          key={`${day.toISOString()}-${minute}`}
+                          className="h-16 w-full border-b hover:bg-slate-50"
+                          onClick={() => openCreateForSlot(day, minute)}
+                        />
+                      ))}
+
+                      {dayLessons.map((lesson) => {
+                        const { topPercent, heightPercent } = getLessonPosition(
+                          lesson.start_at,
+                          lesson.duration_min,
+                          visibleRange.startMinute,
+                          visibleRange.endMinute,
+                        );
+                        const studentName = studentsMap.get(lesson.student_id) || `Ученик #${lesson.student_id}`;
+                        return (
+                          <div key={lesson.id} className="absolute left-1 right-1" style={{ top: `${topPercent}%`, minHeight: `${heightPercent}%` }}>
+                            <LessonCard lesson={lesson} studentName={studentName} onClick={() => setEditLesson(lesson)} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {loading ? <p className="mt-2 text-sm text-slate-500">Загружаем уроки...</p> : null}
+        </div>
+      </div>
 
       {createAt ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
-            <h3 className="text-lg font-semibold">Быстрое создание урока</h3>
-            <p className="text-sm text-slate-500">{createAt.toLocaleString("ru-RU")}</p>
-            <select className="w-full rounded border px-3 py-2" value={form.student_id} onChange={(e) => setForm((f) => ({ ...f, student_id: e.target.value }))}>
-              <option value="">Выберите ученика</option>
-              {students.map((student) => (
-                <option value={student.id} key={student.id}>{student.name}</option>
-              ))}
-            </select>
-            <input className="w-full rounded border px-3 py-2" placeholder="Тема" value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} />
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded border px-3 py-2" type="number" value={form.duration_min} onChange={(e) => setForm((f) => ({ ...f, duration_min: e.target.value }))} />
-              <input className="rounded border px-3 py-2" type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setCreateAt(null)}>Отмена</Button>
-              <Button onClick={() => void submitCreate()}>Создать</Button>
-            </div>
-          </div>
-        </div>
+        <LessonCreateModal
+          createAt={createAt}
+          students={students}
+          form={form}
+          onClose={() => setCreateAt(null)}
+          onChange={setForm}
+          onSubmit={() => void submitCreate()}
+        />
       ) : null}
 
       {editLesson ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
-            <h3 className="text-lg font-semibold">Редактирование урока</h3>
-            <input className="w-full rounded border px-3 py-2" value={editLesson.topic ?? ""} onChange={(e) => setEditLesson({ ...editLesson, topic: e.target.value })} />
-            <select className="w-full rounded border px-3 py-2" value={editLesson.status} onChange={(e) => setEditLesson({ ...editLesson, status: e.target.value as LessonItem["status"] })}>
-              <option value="scheduled">Запланировано</option>
-              <option value="done">Проведено</option>
-              <option value="canceled">Отменено</option>
-            </select>
-            <div className="grid grid-cols-2 gap-2">
-              <input className="rounded border px-3 py-2" type="number" value={editLesson.duration_min} onChange={(e) => setEditLesson({ ...editLesson, duration_min: Number(e.target.value) })} />
-              <input className="rounded border px-3 py-2" type="number" value={editLesson.price} onChange={(e) => setEditLesson({ ...editLesson, price: Number(e.target.value) })} />
-            </div>
-            <div className="flex justify-between gap-2">
-              <Button variant="outline" onClick={() => setMoveLesson(editLesson)}>Перенести</Button>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setEditLesson(null)}>Отмена</Button>
-                <Button onClick={() => void submitEdit()}>Сохранить</Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LessonDetailsDrawer
+          lesson={editLesson}
+          studentName={studentsMap.get(editLesson.student_id) || `Ученик #${editLesson.student_id}`}
+          onClose={() => setEditLesson(null)}
+          onChange={setEditLesson}
+          onSubmit={() => void submitEdit()}
+          onMove={() => setMoveLesson(editLesson)}
+        />
       ) : null}
 
       {moveLesson ? <MoveModal lesson={moveLesson} onClose={() => setMoveLesson(null)} onSave={submitMove} /> : null}
+    </div>
+  );
+}
+
+function LessonCreateModal({
+  createAt,
+  students,
+  form,
+  onClose,
+  onChange,
+  onSubmit,
+}: {
+  createAt: Date;
+  students: Array<{ id: number; name: string }>;
+  form: { student_id: string; topic: string; duration_min: string; price: string; status: string };
+  onClose: () => void;
+  onChange: (next: { student_id: string; topic: string; duration_min: string; price: string; status: string }) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
+        <h3 className="text-lg font-semibold">Быстрое создание урока</h3>
+        <p className="text-sm text-slate-500">{createAt.toLocaleString("ru-RU")}</p>
+        <select className="w-full rounded border px-3 py-2" value={form.student_id} onChange={(e) => onChange({ ...form, student_id: e.target.value })}>
+          <option value="">Выберите ученика</option>
+          {students.map((student) => (
+            <option value={student.id} key={student.id}>
+              {student.name}
+            </option>
+          ))}
+        </select>
+        <input className="w-full rounded border px-3 py-2" placeholder="Тема" value={form.topic} onChange={(e) => onChange({ ...form, topic: e.target.value })} />
+        <div className="grid grid-cols-2 gap-2">
+          <input className="rounded border px-3 py-2" type="number" value={form.duration_min} onChange={(e) => onChange({ ...form, duration_min: e.target.value })} />
+          <input className="rounded border px-3 py-2" type="number" value={form.price} onChange={(e) => onChange({ ...form, price: e.target.value })} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button onClick={onSubmit}>Создать</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LessonDetailsDrawer({
+  lesson,
+  studentName,
+  onClose,
+  onChange,
+  onSubmit,
+  onMove,
+}: {
+  lesson: LessonItem;
+  studentName: string;
+  onClose: () => void;
+  onChange: (lesson: LessonItem) => void;
+  onSubmit: () => void;
+  onMove: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40">
+      <div className="ml-auto h-full w-full max-w-md space-y-3 border-l bg-white p-5 shadow-2xl">
+        {/* Комментарий наставника: drawer ускоряет правки из календаря и сохраняет контекст недели, а action-heavy операции остаются на dashboard. */}
+        <h3 className="text-lg font-semibold">Детали занятия</h3>
+        <p className="text-sm text-slate-500">{studentName}</p>
+        <input className="w-full rounded border px-3 py-2" value={lesson.topic ?? ""} onChange={(e) => onChange({ ...lesson, topic: e.target.value })} />
+        <select className="w-full rounded border px-3 py-2" value={lesson.status} onChange={(e) => onChange({ ...lesson, status: e.target.value as LessonItem["status"] })}>
+          <option value="scheduled">Запланировано</option>
+          <option value="done">Проведено</option>
+          <option value="canceled">Отменено</option>
+        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            className="rounded border px-3 py-2"
+            type="number"
+            value={lesson.duration_min}
+            onChange={(e) => onChange({ ...lesson, duration_min: Number(e.target.value) })}
+          />
+          <input className="rounded border px-3 py-2" type="number" value={lesson.price} onChange={(e) => onChange({ ...lesson, price: Number(e.target.value) })} />
+        </div>
+        <div className="flex justify-between gap-2 pt-2">
+          <Button variant="outline" onClick={onMove}>
+            Перенести
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Отмена
+            </Button>
+            <Button onClick={onSubmit}>Сохранить</Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -297,7 +403,9 @@ function MoveModal({ lesson, onClose, onSave }: { lesson: LessonItem; onClose: (
         <h3 className="text-lg font-semibold">Перенос урока</h3>
         <input className="w-full rounded border px-3 py-2" type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} />
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Отмена</Button>
+          <Button variant="ghost" onClick={onClose}>
+            Отмена
+          </Button>
           <Button onClick={() => void onSave(value)}>Сохранить</Button>
         </div>
       </div>
