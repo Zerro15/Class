@@ -126,6 +126,32 @@ interface LessonPayload {
   price: number;
 }
 
+export interface LessonItem {
+  id: number;
+  student_id: number;
+  student_name?: string | null;
+  start_at: string;
+  duration_min: number;
+  status: "scheduled" | "done" | "canceled";
+  topic?: string | null;
+  price: number;
+  is_archived: boolean;
+  is_paid?: boolean | null;
+  is_homework_sent?: boolean | null;
+  series_id?: number | null;
+}
+
+export interface UserSettings {
+  id: number;
+  owner_id: number;
+  default_lesson_duration_min: number;
+  default_lesson_price: number;
+  workday_start: string;
+  workday_end: string;
+  week_start: "monday" | "sunday";
+  timezone: string;
+}
+
 export interface FinanceFilters {
   from?: string;
   to?: string;
@@ -194,6 +220,13 @@ export const api = {
       }>;
     }>(`/api/v1/dashboard/upcoming?days=${days}`);
   },
+  listLessons(filters: { from?: string; to?: string }) {
+    const params = new URLSearchParams();
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+    const qs = params.toString();
+    return request<LessonItem[]>(`/api/v1/lessons${qs ? `?${qs}` : ""}`);
+  },
   requestLesson(id: number) {
     return request<{
       id: number;
@@ -205,7 +238,7 @@ export const api = {
       is_archived: boolean;
     }>(`/api/v1/lessons/${id}`);
   },
-  updateLesson(id: number, payload: { status?: string; is_archived?: boolean }) {
+  updateLesson(id: number, payload: { status?: string; is_archived?: boolean; start_at?: string; duration_min?: number; topic?: string | null; price?: number }) {
     return request<{ id: number }>(`/api/v1/lessons/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -264,5 +297,14 @@ export const api = {
         transferred_at: string | null;
       }>;
     }>(`/api/v1/finance/items${toQueryString(filters)}`);
+  },
+  getSettings() {
+    return request<UserSettings>("/api/v1/settings");
+  },
+  updateSettings(payload: Omit<UserSettings, "id" | "owner_id">) {
+    return request<UserSettings>("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
   },
 };

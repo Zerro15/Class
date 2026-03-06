@@ -194,3 +194,54 @@ def test_lessons_filter_range(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
+
+
+def test_lessons_list_contains_student_projection(client: TestClient) -> None:
+    token = register_user(client, "calendar-projection@example.com")
+    student_resp = client.post(
+        "/api/v1/students",
+        headers=auth_headers(token),
+        json={"name": "Helen", "notes": None},
+    )
+    student_id = student_resp.json()["id"]
+
+    lesson_resp = client.post(
+        "/api/v1/lessons",
+        headers=auth_headers(token),
+        json={
+            "student_id": student_id,
+            "start_at": datetime.now(timezone.utc).isoformat(),
+            "duration_min": 45,
+            "status": "scheduled",
+            "topic": "English",
+            "price": 25,
+        },
+    )
+    assert lesson_resp.status_code == 201
+
+    response = client.get("/api/v1/lessons", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json()[0]["student_name"] == "Helen"
+
+
+def test_settings_get_and_update(client: TestClient) -> None:
+    token = register_user(client, "settings@example.com")
+
+    get_resp = client.get("/api/v1/settings", headers=auth_headers(token))
+    assert get_resp.status_code == 200
+    assert get_resp.json()["default_lesson_duration_min"] == 60
+
+    update_resp = client.put(
+        "/api/v1/settings",
+        headers=auth_headers(token),
+        json={
+            "default_lesson_duration_min": 90,
+            "default_lesson_price": 3200,
+            "workday_start": "10:00",
+            "workday_end": "20:00",
+            "week_start": "sunday",
+            "timezone": "Europe/Berlin",
+        },
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["default_lesson_duration_min"] == 90

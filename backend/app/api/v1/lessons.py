@@ -40,7 +40,18 @@ def list_lessons(
         query = query.filter(Lesson.start_at >= from_date)
     if to_date:
         query = query.filter(Lesson.start_at <= to_date)
-    return query.order_by(Lesson.start_at.asc()).all()
+    lessons = query.order_by(Lesson.start_at.asc()).all()
+    # Комментарий наставника: добавляем student_name/is_paid/is_homework_sent на backend, чтобы календарь не делал N+1 запросы по каждой карточке.
+    student_map = {
+        row.id: row.name
+        for row in db.query(Student.id, Student.name).filter(Student.owner_id == current_user.id).all()
+    }
+    for lesson in lessons:
+        lesson.student_name = student_map.get(lesson.student_id)
+        lesson.is_paid = lesson.payment.is_paid if lesson.payment else None
+        lesson.is_homework_sent = lesson.homework.is_sent if lesson.homework else None
+        lesson.series_id = None
+    return lessons
 
 
 @router.get("/{lesson_id}", response_model=LessonOut)

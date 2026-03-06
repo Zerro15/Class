@@ -42,6 +42,10 @@ class LessonOut(BaseModel):
     price: float
     tax_percent: float
     is_archived: bool
+    student_name: str | None = None
+    is_paid: bool | None = None
+    is_homework_sent: bool | None = None
+    series_id: int | None = None
 
     class Config:
         from_attributes = True
