@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BookOpenText, CalendarDays, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings, Users, Wallet } from "lucide-react";
 
 import { ConfirmModal } from "@/app/components/ConfirmModal";
 import { useToast } from "@/app/components/ToastProvider";
@@ -10,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { api, ApiError, clearToken, getToken } from "@/lib/api";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Панель управления" },
-  { href: "/students", label: "Ученики" },
-  { href: "/calendar", label: "Календарь" },
-  { href: "/lessons", label: "Уроки" },
-  { href: "/finance", label: "Финансы" },
-  { href: "/settings", label: "Настройки" },
+  { href: "/dashboard", label: "Панель управления", icon: LayoutDashboard },
+  { href: "/students", label: "Ученики", icon: Users },
+  { href: "/calendar", label: "Календарь", icon: CalendarDays },
+  { href: "/lessons", label: "Уроки", icon: BookOpenText },
+  { href: "/finance", label: "Финансы", icon: Wallet },
+  { href: "/settings", label: "Настройки", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -26,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [checkingSession, setCheckingSession] = useState(!isAuthPage);
   const [profileEmail, setProfileEmail] = useState<string>("");
   const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const ensureSession = async () => {
@@ -76,29 +78,60 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex w-full max-w-[1400px]">
-        {/* Комментарий наставника: sidebar остаётся всегда видимым на desktop, чтобы навигация ощущалась как полноценный рабочий инструмент. */}
-        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r bg-white p-4 lg:flex lg:flex-col">
-          <Link href="/dashboard" className="mb-6 text-lg font-semibold text-slate-900">
-            ClassFlow
-          </Link>
+    <div className="min-h-screen bg-slate-100">
+      <div className="mx-auto flex w-full max-w-[1720px]">
+        <aside className={`sticky top-0 hidden h-screen shrink-0 border-r bg-white p-4 transition-all duration-200 lg:flex lg:flex-col ${sidebarCollapsed ? "w-[72px]" : "w-[252px]"}`}>
+          <div className={`mb-6 flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between"}`}>
+            {!sidebarCollapsed ? (
+              <Link href="/dashboard" className="text-lg font-semibold text-slate-900">
+                ClassFlow
+              </Link>
+            ) : (
+              <Link href="/dashboard" className="text-base font-semibold text-slate-900">
+                CF
+              </Link>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Свернуть или развернуть глобальную панель"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
+          </div>
+
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const Icon = item.icon;
               return (
-                <Link key={item.href} href={item.href} className={`${navBaseClass} ${isActive ? activeNavClass : ""}`}>
-                  {item.label}
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={item.label}
+                  className={`${navBaseClass} ${isActive ? activeNavClass : ""} ${sidebarCollapsed ? "justify-center px-2" : "gap-2"}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!sidebarCollapsed ? item.label : null}
                 </Link>
               );
             })}
           </nav>
+
           <div className="mt-auto rounded-xl border bg-slate-50 p-3">
-            <p className="text-xs text-slate-500">Вы вошли как</p>
-            <p className="truncate text-sm font-medium text-slate-800">{profileEmail || "Пользователь"}</p>
-            <Button className="mt-3 w-full" variant="outline" onClick={() => setIsLogoutOpen(true)}>
-              Выход
-            </Button>
+            {!sidebarCollapsed ? (
+              <>
+                <p className="text-xs text-slate-500">Вы вошли как</p>
+                <p className="truncate text-sm font-medium text-slate-800">{profileEmail || "Пользователь"}</p>
+                <Button className="mt-3 w-full" variant="outline" onClick={() => setIsLogoutOpen(true)}>
+                  Выход
+                </Button>
+              </>
+            ) : (
+              <Button className="w-full" variant="outline" onClick={() => setIsLogoutOpen(true)} title="Выход">
+                ↩
+              </Button>
+            )}
           </div>
         </aside>
 
@@ -122,7 +155,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           </header>
-          <main className="px-4 py-6 lg:px-8">{children}</main>
+          <main className="px-4 py-6 lg:px-6">{children}</main>
         </div>
       </div>
 
