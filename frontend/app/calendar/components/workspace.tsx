@@ -1,8 +1,23 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, DragEvent } from "react";
 
-import { ChevronLeft, ChevronRight, Menu, Plus, Search, X } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  HelpCircle,
+  Copy,
+  Grip,
+  Menu,
+  Pencil,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { LessonItem } from "@/lib/api";
@@ -23,26 +38,48 @@ const FILTER_ITEMS = [
   { key: "canceled", label: "Отменённые" },
 ] as const;
 
+const LESSON_COLOR_CLASSES: Record<string, string> = {
+  green: "border-emerald-400/50 bg-emerald-500/25 text-emerald-50",
+  yellow: "border-amber-300/40 bg-amber-400/25 text-amber-50",
+  blue: "border-blue-400/45 bg-blue-500/30 text-blue-50",
+  orange: "border-orange-300/40 bg-orange-500/28 text-orange-50",
+  purple: "border-violet-400/50 bg-violet-500/28 text-violet-50",
+};
+
+const LESSON_COLOR_DOTS: Array<{ key: string; className: string }> = [
+  { key: "green", className: "bg-emerald-500" },
+  { key: "yellow", className: "bg-amber-400" },
+  { key: "blue", className: "bg-blue-500" },
+  { key: "orange", className: "bg-orange-500" },
+  { key: "purple", className: "bg-violet-500" },
+];
+
 export type LessonFilter = (typeof FILTER_ITEMS)[number]["key"];
 
+function getWeekNumber(date: Date) {
+  const value = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = value.getUTCDay() || 7;
+  value.setUTCDate(value.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
+  return Math.ceil(((value.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
 export function CalendarToolbar({
-  title,
   viewMode,
   onViewMode,
   onPrev,
   onNext,
   onToday,
   onToggleSidebar,
-  onCreate,
+  anchorDate,
 }: {
-  title: string;
   viewMode: CalendarViewMode;
   onViewMode: (mode: CalendarViewMode) => void;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
   onToggleSidebar: () => void;
-  onCreate: () => void;
+  anchorDate: Date;
 }) {
   const modes: Array<{ value: CalendarViewMode; label: string }> = [
     { value: "day", label: "День" },
@@ -50,55 +87,63 @@ export function CalendarToolbar({
     { value: "week", label: "Неделя" },
     { value: "month", label: "Месяц" },
   ];
+  const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(anchorDate);
+  const weekBadge = `Неделя ${getWeekNumber(anchorDate)}`;
 
   return (
-    <div className="sticky top-0 z-30 rounded-xl border bg-white/95 p-3 backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="sticky top-0 z-40 rounded-2xl border border-slate-700 bg-[#202124]/95 px-4 py-3 shadow-xl backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-slate-200">
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onToggleSidebar} aria-label="Показать или скрыть календарную панель" className="h-9 w-9 px-0">
-            <Menu className="h-4 w-4" />
+          <button
+            onClick={onToggleSidebar}
+            aria-label="Показать или скрыть календарную панель"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-300 transition hover:bg-slate-700/70 hover:text-white"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <p className="text-base font-medium tracking-wide">Календарь</p>
+          <Button variant="outline" onClick={onToday} className="rounded-full border-slate-600 bg-transparent text-slate-200 hover:bg-slate-700">
+            Сегодня
           </Button>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" onClick={onPrev} aria-label="Назад" className="h-9 w-9 px-0">
+          <div className="flex items-center">
+            <button onClick={onPrev} aria-label="Назад" className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-700/70">
               <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" onClick={onToday}>Сегодня</Button>
-            <Button variant="outline" onClick={onNext} aria-label="Вперёд" className="h-9 w-9 px-0">
+            </button>
+            <button onClick={onNext} aria-label="Вперёд" className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-700/70">
               <ChevronRight className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
-          <h1 className="text-sm font-semibold text-slate-900 sm:text-base">{title}</h1>
+          <p className="text-lg font-semibold capitalize text-slate-100">{monthLabel}</p>
+          <span className="rounded-full border border-sky-400/60 bg-sky-500/20 px-2 py-0.5 text-xs text-sky-200">{weekBadge}</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center rounded-lg border bg-slate-50 p-1 md:flex">
+        <div className="flex items-center gap-1">
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-slate-700/70 hover:text-white" aria-label="Поиск">
+            <Search className="h-4 w-4" />
+          </button>
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-slate-700/70 hover:text-white" aria-label="Справка">
+            <HelpCircle className="h-4 w-4" />
+          </button>
+          <button className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-slate-700/70 hover:text-white" aria-label="Настройки">
+            <Settings className="h-4 w-4" />
+          </button>
+          <div className="hidden items-center rounded-xl border border-slate-600 bg-slate-800/80 p-1 md:flex">
             {modes.map((mode) => (
               <button
                 key={mode.value}
-                className={`rounded-md px-3 py-1.5 text-sm transition ${
-                  mode.value === viewMode ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                  mode.value === viewMode ? "bg-slate-600 text-white" : "text-slate-300 hover:bg-slate-700"
                 }`}
                 onClick={() => onViewMode(mode.value)}
               >
                 {mode.label}
               </button>
             ))}
+            <button className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-300 hover:bg-slate-700">
+              <ChevronDown className="h-4 w-4" />
+            </button>
           </div>
-          <Button variant="outline" aria-label="Поиск и фильтры" className="h-9 w-9 px-0">
-            <Search className="h-4 w-4" />
-          </Button>
-          <Button onClick={onCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Создать
-          </Button>
         </div>
-      </div>
-      <div className="mt-2 flex items-center gap-1 overflow-x-auto md:hidden">
-        {modes.map((mode) => (
-          <Button key={mode.value} variant={mode.value === viewMode ? "default" : "outline"} size="sm" onClick={() => onViewMode(mode.value)}>
-            {mode.label}
-          </Button>
-        ))}
       </div>
     </div>
   );
@@ -129,76 +174,84 @@ export function CalendarSidebar({
 }) {
   if (isCollapsed) {
     return (
-      <div className="flex w-14 shrink-0 flex-col items-center gap-2 rounded-xl border bg-white p-2">
-        <Button variant="outline" onClick={onToggle} aria-label="Развернуть панель" className="h-9 w-9 px-0">
+      <aside className="flex h-fit w-[72px] shrink-0 flex-col items-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <button onClick={onToggle} className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="Развернуть панель">
           <Menu className="h-4 w-4" />
-        </Button>
-        <Button onClick={onCreate} aria-label="Создать занятие" className="h-9 w-9 px-0">
+        </button>
+        <button onClick={onCreate} className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white hover:bg-slate-800" aria-label="Создать занятие">
           <Plus className="h-4 w-4" />
-        </Button>
-      </div>
+        </button>
+        <CalendarDays className="mt-1 h-4 w-4 text-slate-400" />
+      </aside>
     );
   }
 
   const monthStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
   const monthEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
+  const startWeekday = ((monthStart.getDay() + 6) % 7);
 
   return (
-    <aside className="w-72 shrink-0 space-y-4 rounded-xl border bg-white p-4">
-      {/* Комментарий наставника: локальная collapsible-панель внутри calendar-page экономит место и не вмешивается в глобальный app shell. */}
+    <aside className="w-[260px] shrink-0 space-y-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm">
       <div className="flex items-center justify-between">
-        <Button onClick={onCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Создать занятие
-        </Button>
-        <Button variant="ghost" onClick={onToggle} aria-label="Свернуть панель" className="h-9 w-9 px-0">
-          <X className="h-4 w-4" />
-        </Button>
+        <button onClick={onCreate} className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-3 font-medium text-white transition hover:bg-slate-800">
+          <Plus className="h-4 w-4" /> Создать
+        </button>
+        <button onClick={onToggle} className="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100" aria-label="Свернуть панель">
+          <Grip className="h-4 w-4" />
+        </button>
       </div>
 
-      <div className="rounded-lg border p-3">
-        <p className="mb-2 text-sm font-semibold capitalize text-slate-800">
-          {selectedDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
-        </p>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500">
-          {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-            <span key={d}>{d}</span>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-2 text-sm font-semibold capitalize">{selectedDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</p>
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase text-slate-500">
+          {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((day) => (
+            <span key={day}>{day}</span>
           ))}
-          {Array.from({ length: monthEnd.getDate() }).map((_, i) => {
+        </div>
+        <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">
+          {Array.from({ length: startWeekday }).map((_, index) => (
+            <span key={`empty-${index}`} className="py-1" />
+          ))}
+          {Array.from({ length: monthEnd.getDate() }).map((_, index) => {
             const day = new Date(monthStart);
-            day.setDate(i + 1);
+            day.setDate(index + 1);
             const isActive = day.toDateString() === selectedDate.toDateString();
+            const isToday = day.toDateString() === new Date().toDateString();
             return (
               <button
                 key={day.toISOString()}
-                className={`rounded-md py-1 transition ${isActive ? "bg-blue-100 font-medium text-blue-700" : "hover:bg-slate-100"}`}
+                className={`rounded-md py-1 transition ${isActive ? "bg-blue-600 text-white" : isToday ? "text-blue-600" : "text-slate-700 hover:bg-slate-100"}`}
                 onClick={() => onDatePick(day)}
               >
-                {i + 1}
+                {index + 1}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Фильтры</p>
-        {FILTER_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className={`w-full rounded-md px-2 py-1.5 text-left text-sm transition ${
-              lessonFilter === item.key ? "bg-slate-900 text-white" : "hover:bg-slate-100"
-            }`}
-            onClick={() => onLessonFilter(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Фильтры</p>
+        <div className="space-y-1">
+          {FILTER_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={`w-full min-w-0 truncate rounded-lg px-2 py-1.5 text-left text-sm transition ${lessonFilter === item.key ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}
+              onClick={() => onLessonFilter(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ученик</p>
-        <select className="w-full rounded-md border px-2 py-2 text-sm" value={selectedStudentId} onChange={(event) => onStudent(event.target.value)}>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Ученик</p>
+        <select
+          className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+          value={selectedStudentId}
+          onChange={(event) => onStudent(event.target.value)}
+        >
           <option value="all">Все ученики</option>
           {students.map((student) => (
             <option key={student.id} value={String(student.id)}>
@@ -207,38 +260,81 @@ export function CalendarSidebar({
           ))}
         </select>
       </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <p className="mb-1 font-semibold">Быстрый поиск</p>
+        <p>Найдите окно для занятий и сразу создайте урок в нужном слоте.</p>
+      </div>
     </aside>
   );
 }
-
-const LESSON_STYLE: Record<string, string> = {
-  scheduled: "border-blue-200 bg-blue-50 text-blue-900",
-  done: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  canceled: "border-rose-200 bg-rose-50 text-rose-800",
-};
 
 export function LessonCard({
   lesson,
   studentName,
   style,
+  color,
   onClick,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onColorChange,
+  onDragStart,
 }: {
-  lesson: { id: number; start_at: string; duration_min: number; status: "scheduled" | "done" | "canceled"; topic?: string | null; is_paid?: boolean | null; series_id?: number | null };
+  lesson: LessonItem;
   studentName: string;
   style?: CSSProperties;
+  color: string;
   onClick: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onColorChange: (value: string) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>, lessonId: number) => void;
 }) {
+  const startMinute = new Date(lesson.start_at).getHours() * 60 + new Date(lesson.start_at).getMinutes();
+  const endMinute = startMinute + lesson.duration_min;
+  const colorClass = LESSON_COLOR_CLASSES[color] ?? LESSON_COLOR_CLASSES.blue;
+
   return (
-    <button className={`rounded-md border px-2 py-1.5 text-left text-xs shadow-sm ${LESSON_STYLE[lesson.status]}`} style={style} onClick={onClick}>
-      {/* Комментарий наставника: статус остаётся цветовым кодом — это ускоряет сканирование расписания без перегруза текста в карточке. */}
-      <p className="font-medium">{studentName}</p>
-      <p className="truncate">{lesson.topic || "Без темы"}</p>
-      <p>{new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
-      <div className="mt-1 flex items-center gap-1">
-        {lesson.is_paid ? <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px]">Оплачено</span> : null}
-        {lesson.series_id ? <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px]">Повтор</span> : null}
+    <div
+      className={`group relative h-full min-w-0 overflow-hidden cursor-grab rounded-xl border px-2 py-2 text-left shadow-md transition hover:shadow-lg ${colorClass}`}
+      style={style}
+      onClick={onClick}
+      draggable
+      onDragStart={(event) => onDragStart(event, lesson.id)}
+    >
+      <p className="truncate text-sm font-bold leading-tight">{studentName}</p>
+      <p className="truncate text-xs opacity-95 leading-tight">{lesson.topic || "Без темы"}</p>
+      <p className="text-xs">{Math.round(lesson.price)} ₽</p>
+      <p className="text-xs">{`${minuteToLabel(startMinute)}–${minuteToLabel(endMinute)}`}</p>
+
+      <div className="absolute right-1 top-1 hidden max-w-[calc(100%-8px)] items-center gap-1 overflow-hidden rounded-lg bg-slate-950/80 p-1 group-hover:flex">
+        <button className="rounded p-1 text-slate-100 hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); onEdit(); }} aria-label="Редактировать">
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button className="rounded p-1 text-slate-100 hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); onDuplicate(); }} aria-label="Дублировать">
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <button className="rounded p-1 text-rose-300 hover:bg-rose-500/20" onClick={(event) => { event.stopPropagation(); onDelete(); }} aria-label="Удалить">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
-    </button>
+
+      <div className="absolute bottom-1 right-1 hidden items-center gap-1 rounded-full bg-slate-950/80 p-1 group-hover:flex">
+        {LESSON_COLOR_DOTS.map((item) => (
+          <button
+            key={item.key}
+            className={`h-3 w-3 rounded-full ${item.className} ${color === item.key ? "ring-2 ring-white" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onColorChange(item.key);
+            }}
+            aria-label={`Цвет ${item.key}`}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -256,18 +352,18 @@ export function MonthGrid({
   studentsMap: Map<number, string>;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-2 gap-3 text-slate-100 sm:grid-cols-4 lg:grid-cols-7">
       {days.map((day) => {
         const key = day.toDateString();
         const dayLessons = lessonsByDay.get(key) ?? [];
         return (
-          <button key={key} className="min-h-32 rounded-lg border bg-white p-2 text-left hover:bg-slate-50" onClick={() => onCreate(day)}>
-            <p className="text-xs font-medium text-slate-600">{formatDayHeader(day, true)}</p>
+          <button key={key} className="min-h-32 min-w-0 overflow-hidden rounded-xl border border-slate-700 bg-[#25262b] p-2 text-left transition hover:bg-slate-800" onClick={() => onCreate(day)}>
+            <p className="text-xs font-medium text-slate-300">{formatDayHeader(day, true)}</p>
             <div className="mt-2 space-y-1">
               {dayLessons.slice(0, 3).map((lesson) => (
                 <div
                   key={lesson.id}
-                  className={`rounded border px-1.5 py-1 text-[11px] ${LESSON_STYLE[lesson.status]}`}
+                  className="rounded-md border border-slate-600 bg-slate-700/70 px-1.5 py-1 text-[11px] text-slate-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenLesson(lesson.id);
@@ -292,54 +388,59 @@ export function WeeklyTimeGrid({
   studentsMap,
   startMinute,
   endMinute,
+  lessonColors,
   onCreate,
   onOpenLesson,
+  onMoveLesson,
+  onDuplicateLesson,
+  onDeleteLesson,
+  onColorChange,
 }: {
   days: Date[];
   lessonsByDay: Map<string, WeeklyGridLesson[]>;
   studentsMap: Map<number, string>;
   startMinute: number;
   endMinute: number;
+  lessonColors: Record<number, string>;
   onCreate: (day: Date, minute: number) => void;
   onOpenLesson: (lesson: WeeklyGridLesson) => void;
+  onMoveLesson: (lessonId: number, day: Date, minute: number) => void;
+  onDuplicateLesson: (lesson: WeeklyGridLesson) => void;
+  onDeleteLesson: (lesson: WeeklyGridLesson) => void;
+  onColorChange: (lessonId: number, color: string) => void;
 }) {
   const slots = Array.from({ length: Math.ceil((endMinute - startMinute) / TIME_SLOT_MINUTES) + 1 }).map((_, index) => startMinute + index * TIME_SLOT_MINUTES);
   const pixelsPerMinute = PIXELS_PER_HOUR / 60;
-  const gridHeight = Math.max((endMinute - startMinute) * pixelsPerMinute, 420);
+  const gridHeight = Math.max((endMinute - startMinute) * pixelsPerMinute, 760);
   const now = new Date();
   const nowMinute = now.getHours() * 60 + now.getMinutes();
   const showNowLine = nowMinute >= startMinute && nowMinute <= endMinute;
   const nowOffset = (nowMinute - startMinute) * pixelsPerMinute;
 
   return (
-    <div className="h-[calc(100vh-220px)] overflow-auto rounded-lg border">
-      <div className={`grid min-w-[860px] grid-cols-[72px_repeat(${days.length},minmax(0,1fr))]`}>
-        <div className="sticky left-0 top-0 z-40 border-b border-r bg-white" />
+    <div className="h-[calc(100vh-210px)] overflow-auto rounded-2xl border border-slate-700 bg-[#202124] shadow-2xl">
+      <div
+        className="grid min-w-[980px]"
+        style={{ gridTemplateColumns: `68px repeat(${days.length}, minmax(0, 1fr))` }}
+      >
+        <div className="sticky left-0 top-0 z-40 border-b border-r border-slate-700 bg-[#202124]" />
         {days.map((day) => {
           const isToday = day.toDateString() === now.toDateString();
           return (
-            <div
-              key={day.toISOString()}
-              className={`sticky top-0 z-30 border-b px-2 py-2 text-center text-sm ${
-                isToday ? "bg-blue-50 font-semibold text-blue-700" : "bg-white text-slate-700"
-              }`}
-            >
-              {formatDayHeader(day)}
+            <div key={day.toISOString()} className="sticky top-0 z-30 border-b border-slate-700 bg-[#202124] px-2 py-2 text-center">
+              <p className="text-xs uppercase text-slate-400">{new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(day)}</p>
+              <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm ${isToday ? "bg-sky-500 text-white" : "text-slate-200"}`}>{day.getDate()}</span>
             </div>
           );
         })}
 
-        <div className="sticky left-0 z-30 border-r bg-white">
+        <div className="sticky left-0 z-30 border-r border-slate-700 bg-[#202124]">
           <div style={{ height: gridHeight }} className="relative">
             {slots.map((minute) => {
               const top = (minute - startMinute) * pixelsPerMinute;
               const isHour = minute % 60 === 0;
               return (
-                <div
-                  key={`time-${minute}`}
-                  className={`absolute right-2 text-right text-xs ${isHour ? "text-slate-500" : "text-slate-300"}`}
-                  style={{ top: Math.max(0, top - 8) }}
-                >
+                <div key={`time-${minute}`} className={`absolute right-2 text-right text-xs ${isHour ? "text-slate-400" : "text-slate-600"}`} style={{ top: Math.max(0, top - 8) }}>
                   {isHour ? minuteToLabel(minute) : ""}
                 </div>
               );
@@ -357,24 +458,30 @@ export function WeeklyTimeGrid({
           const isToday = day.toDateString() === now.toDateString();
 
           return (
-            <div key={day.toISOString()} className={`relative border-r last:border-r-0 ${isToday ? "bg-blue-50/20" : "bg-white"}`} style={{ height: gridHeight }}>
+            <div key={day.toISOString()} className={`relative min-w-0 overflow-hidden border-r border-slate-700 ${isToday ? "bg-sky-500/5" : "bg-[#202124]"}`} style={{ height: gridHeight }}>
               {slots.map((minute) => {
                 const top = (minute - startMinute) * pixelsPerMinute;
                 const isHour = minute % 60 === 0;
                 return (
                   <button
                     key={`${day.toISOString()}-${minute}`}
-                    className={`absolute left-0 right-0 border-t transition hover:bg-slate-100/70 ${isHour ? "border-slate-200" : "border-slate-100"}`}
+                    className={`absolute left-0 right-0 border-t transition hover:bg-slate-700/30 ${isHour ? "border-slate-700" : "border-slate-800"}`}
                     style={{ top, height: TIME_SLOT_MINUTES * pixelsPerMinute }}
                     onClick={() => onCreate(day, minute)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const lessonId = Number(event.dataTransfer.getData("lesson-id"));
+                      if (lessonId) onMoveLesson(lessonId, day, minute);
+                    }}
+                    onDragOver={(event) => event.preventDefault()}
                     aria-label={`Создать занятие на ${formatDayHeader(day, true)} ${minuteToLabel(minute)}`}
                   />
                 );
               })}
 
               {showNowLine && isToday ? (
-                <div className="absolute left-0 right-0 z-20 border-t-2 border-rose-500" style={{ top: nowOffset }}>
-                  <span className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-rose-500" />
+                <div className="absolute left-0 right-0 z-20 border-t-2 border-red-500" style={{ top: nowOffset }}>
+                  <span className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500" />
                 </div>
               ) : null}
 
@@ -383,7 +490,7 @@ export function WeeklyTimeGrid({
                 return (
                   <div
                     key={item.lesson.id}
-                    className="absolute z-30 px-1"
+                    className="absolute z-30 min-w-0 overflow-hidden px-1"
                     style={{
                       top: item.top,
                       height: item.height,
@@ -392,13 +499,32 @@ export function WeeklyTimeGrid({
                       minHeight: MIN_EVENT_HEIGHT_PX,
                     }}
                   >
-                    <LessonCard lesson={item.lesson} studentName={studentName} onClick={() => onOpenLesson(item.lesson)} style={{ height: "100%" }} />
+                    <LessonCard
+                      lesson={item.lesson}
+                      studentName={studentName}
+                      onClick={() => onOpenLesson(item.lesson)}
+                      style={{ height: "100%" }}
+                      color={lessonColors[item.lesson.id] ?? "blue"}
+                      onEdit={() => onOpenLesson(item.lesson)}
+                      onDuplicate={() => onDuplicateLesson(item.lesson)}
+                      onDelete={() => onDeleteLesson(item.lesson)}
+                      onColorChange={(color) => onColorChange(item.lesson.id, color)}
+                      onDragStart={(event, lessonId) => {
+                        event.dataTransfer.setData("lesson-id", String(lessonId));
+                      }}
+                    />
                   </div>
                 );
               })}
             </div>
           );
         })}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-700 bg-[#202124] px-4 py-2 text-xs text-slate-400">
+        <span className="inline-flex items-center gap-1">
+          <Sparkles className="h-3.5 w-3.5" /> Подсказка: перетащите карточку на другой слот для переноса.
+        </span>
       </div>
     </div>
   );

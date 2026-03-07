@@ -7,12 +7,9 @@ import { CalendarSidebar, CalendarToolbar, LessonFilter, MonthGrid, WeeklyTimeGr
 import { api, LessonItem } from "@/lib/api";
 import {
   CalendarViewMode,
-  formatRangeTitle,
   getCalendarAnchor,
   getVisibleDays,
   groupLessonsByDay,
-  parseTimeToMinutes,
-  resolveVisibleRange,
   shiftAnchor,
   toIsoLocal,
 } from "@/lib/calendar";
@@ -26,12 +23,11 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [students, setStudents] = useState<Array<{ id: number; name: string }>>([]);
-  const [workdayStart, setWorkdayStart] = useState(8 * 60);
-  const [workdayEnd, setWorkdayEnd] = useState(20 * 60);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [lessonFilter, setLessonFilter] = useState<LessonFilter>("all");
   const [studentFilter, setStudentFilter] = useState<string>("all");
+  const [lessonColors, setLessonColors] = useState<Record<number, string>>({});
 
   const [createAt, setCreateAt] = useState<Date | null>(null);
   const [editLesson, setEditLesson] = useState<LessonItem | null>(null);
@@ -39,7 +35,6 @@ export default function CalendarPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
 
   const visibleDays = useMemo(() => getVisibleDays(anchorDate, viewMode), [anchorDate, viewMode]);
-  const title = useMemo(() => formatRangeTitle(anchorDate, viewMode), [anchorDate, viewMode]);
 
   const loadLessons = useCallback(async () => {
     setLoading(true);
@@ -57,17 +52,15 @@ export default function CalendarPage() {
         to.setDate(to.getDate() + 1);
       }
 
-      const [items, studentList, settings] = await Promise.all([
+      const [items, studentList] = await Promise.all([
         api.listLessons({ from: toIsoLocal(from), to: toIsoLocal(to) }),
         api.listStudents(),
-        api.getSettings(),
       ]);
       setLessons(items);
       setStudents(studentList.map((x) => ({ id: x.id, name: x.name })));
-      setWorkdayStart(parseTimeToMinutes(settings.workday_start, 8 * 60));
-      setWorkdayEnd(parseTimeToMinutes(settings.workday_end, 20 * 60));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка загрузки календаря");
+      const message = err instanceof Error ? err.message : "Ошибка загрузки календаря";
+      setError(message === "Failed to fetch" ? "Не удалось подключиться к серверу. Проверьте сеть и повторите попытку." : message);
     } finally {
       setLoading(false);
     }
@@ -97,10 +90,8 @@ export default function CalendarPage() {
 
   const visibleRange = useMemo(() => {
     if (viewMode === "month") return { startMinute: 0, endMinute: 24 * 60 };
-    const scopedLessons = visibleDays.flatMap((day) => lessonsByDay.get(day.toDateString()) ?? []);
-    // Комментарий наставника: показываем рабочий диапазон + уроки рядом, чтобы убрать пустую ночную прокрутку и сохранить контекст занятий вне диапазона.
-    return resolveVisibleRange({ workdayStart, workdayEnd, lessons: scopedLessons });
-  }, [lessonsByDay, viewMode, visibleDays, workdayEnd, workdayStart]);
+    return { startMinute: 6 * 60, endMinute: 22 * 60 };
+  }, [viewMode]);
 
   const openCreateForSlot = (day: Date, minute: number) => {
     const slot = new Date(day);
@@ -142,6 +133,28 @@ export default function CalendarPage() {
     await loadLessons();
   };
 
+  const submitMoveById = async (lessonId: number, nextDate: Date) => {
+    await api.updateLesson(lessonId, { start_at: nextDate.toISOString() });
+    await loadLessons();
+  };
+
+  const duplicateLesson = async (lesson: LessonItem) => {
+    await api.createLesson({
+      student_id: lesson.student_id,
+      start_at: lesson.start_at,
+      duration_min: lesson.duration_min,
+      status: lesson.status,
+      topic: lesson.topic || null,
+      price: lesson.price,
+    });
+    await loadLessons();
+  };
+
+  const deleteLesson = async (lesson: LessonItem) => {
+    await api.updateLesson(lesson.id, { is_archived: true });
+    await loadLessons();
+  };
+
   const monthDays = useMemo(() => {
     if (viewMode !== "month") return [];
     const start = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
@@ -155,56 +168,73 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-3">
-      <CalendarToolbar
-        title={title}
-        viewMode={viewMode}
-        onViewMode={setViewMode}
-        onPrev={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, -1))}
-        onNext={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, 1))}
-        onToday={() => setAnchorDate(getCalendarAnchor(new Date(), viewMode))}
-        onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
-        onCreate={() => openCreateForSlot(new Date(), workdayStart)}
-      />
-
-      <div className="flex gap-3">
-        <CalendarSidebar
-          isCollapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((prev) => !prev)}
-          selectedDate={anchorDate}
-          students={students}
-          selectedStudentId={studentFilter}
-          onStudent={setStudentFilter}
-          lessonFilter={lessonFilter}
-          onLessonFilter={setLessonFilter}
-          onDatePick={(date) => setAnchorDate(getCalendarAnchor(date, viewMode))}
-          onCreate={() => openCreateForSlot(new Date(), workdayStart)}
+      <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+        <CalendarToolbar
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          onPrev={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, -1))}
+          onNext={() => setAnchorDate((prev) => shiftAnchor(prev, viewMode, 1))}
+          onToday={() => setAnchorDate(getCalendarAnchor(new Date(), viewMode))}
+          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+          anchorDate={anchorDate}
         />
 
-        <div className="min-w-0 flex-1 rounded-xl border bg-white p-3">
-          {error ? <p className="mb-2 text-sm text-rose-600">{error}</p> : null}
-          {viewMode === "month" ? (
-            <MonthGrid
-              days={monthDays}
-              lessonsByDay={lessonsByDay}
-              onCreate={(day) => openCreateForSlot(day, workdayStart)}
-              onOpenLesson={(lessonId) => {
-                const found = filteredLessons.find((lesson) => lesson.id === lessonId);
-                if (found) setEditLesson(found);
-              }}
-              studentsMap={studentsMap}
-            />
-          ) : (
-            <WeeklyTimeGrid
-              days={visibleDays}
-              lessonsByDay={lessonsByDay}
-              studentsMap={studentsMap}
-              startMinute={visibleRange.startMinute}
-              endMinute={visibleRange.endMinute}
-              onCreate={openCreateForSlot}
-              onOpenLesson={(lesson) => setEditLesson(lesson)}
-            />
-          )}
-          {loading ? <p className="mt-2 text-sm text-slate-500">Загружаем уроки...</p> : null}
+        <div className="mt-3 flex min-w-0 gap-3 overflow-hidden">
+          <CalendarSidebar
+            isCollapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((prev) => !prev)}
+            selectedDate={anchorDate}
+            students={students}
+            selectedStudentId={studentFilter}
+            onStudent={setStudentFilter}
+            lessonFilter={lessonFilter}
+            onLessonFilter={setLessonFilter}
+            onDatePick={(date) => setAnchorDate(getCalendarAnchor(date, viewMode))}
+            onCreate={() => openCreateForSlot(new Date(), visibleRange.startMinute)}
+          />
+
+          <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-slate-700 bg-[#202124] p-3">
+            {error ? (
+              <div className="mb-3 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="mb-3 rounded-xl border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-200">Загружаем уроки...</div>
+            ) : null}
+
+            {viewMode === "month" ? (
+              <MonthGrid
+                days={monthDays}
+                lessonsByDay={lessonsByDay}
+                onCreate={(day) => openCreateForSlot(day, visibleRange.startMinute)}
+                onOpenLesson={(lessonId) => {
+                  const found = filteredLessons.find((lesson) => lesson.id === lessonId);
+                  if (found) setEditLesson(found);
+                }}
+                studentsMap={studentsMap}
+              />
+            ) : (
+              <WeeklyTimeGrid
+                days={visibleDays}
+                lessonsByDay={lessonsByDay}
+                studentsMap={studentsMap}
+                startMinute={visibleRange.startMinute}
+                endMinute={visibleRange.endMinute}
+                onCreate={openCreateForSlot}
+                onOpenLesson={(lesson) => setEditLesson(lesson)}
+                lessonColors={lessonColors}
+                onMoveLesson={(lessonId, day, minute) => {
+                  const next = new Date(day);
+                  next.setHours(Math.floor(minute / 60), minute % 60, 0, 0);
+                  void submitMoveById(lessonId, next);
+                }}
+                onDuplicateLesson={(lesson) => void duplicateLesson(lesson)}
+                onDeleteLesson={(lesson) => void deleteLesson(lesson)}
+                onColorChange={(lessonId, color) => setLessonColors((prev) => ({ ...prev, [lessonId]: color }))}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -297,7 +327,6 @@ function LessonDetailsDrawer({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40">
       <div className="ml-auto h-full w-full max-w-md space-y-3 border-l bg-white p-5 shadow-2xl">
-        {/* Комментарий наставника: drawer ускоряет правки из календаря и сохраняет контекст недели, а action-heavy операции остаются на dashboard. */}
         <h3 className="text-lg font-semibold">Детали занятия</h3>
         <p className="text-sm text-slate-500">{studentName}</p>
         <input className="w-full rounded border px-3 py-2" value={lesson.topic ?? ""} onChange={(e) => onChange({ ...lesson, topic: e.target.value })} />
