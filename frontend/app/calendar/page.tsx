@@ -3,17 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CalendarSidebar, CalendarToolbar, LessonCard, LessonFilter, MonthGrid } from "@/app/calendar/components/workspace";
+import { CalendarSidebar, CalendarToolbar, LessonFilter, MonthGrid, WeeklyTimeGrid } from "@/app/calendar/components/workspace";
 import { api, LessonItem } from "@/lib/api";
 import {
   CalendarViewMode,
-  formatDayHeader,
   formatRangeTitle,
   getCalendarAnchor,
-  getLessonPosition,
-  getTimeGridLabels,
   getVisibleDays,
-  minuteToLabel,
+  groupLessonsByDay,
   parseTimeToMinutes,
   resolveVisibleRange,
   shiftAnchor,
@@ -95,14 +92,7 @@ export default function CalendarPage() {
   }, [lessonFilter, lessons, studentFilter]);
 
   const lessonsByDay = useMemo(() => {
-    const map = new Map<string, LessonItem[]>();
-    for (const lesson of filteredLessons) {
-      const key = new Date(lesson.start_at).toDateString();
-      const list = map.get(key) ?? [];
-      list.push(lesson);
-      map.set(key, list);
-    }
-    return map;
+    return groupLessonsByDay(filteredLessons);
   }, [filteredLessons]);
 
   const visibleRange = useMemo(() => {
@@ -111,8 +101,6 @@ export default function CalendarPage() {
     // Комментарий наставника: показываем рабочий диапазон + уроки рядом, чтобы убрать пустую ночную прокрутку и сохранить контекст занятий вне диапазона.
     return resolveVisibleRange({ workdayStart, workdayEnd, lessons: scopedLessons });
   }, [lessonsByDay, viewMode, visibleDays, workdayEnd, workdayStart]);
-
-  const timeLabels = useMemo(() => getTimeGridLabels(visibleRange.startMinute, visibleRange.endMinute, 60), [visibleRange]);
 
   const openCreateForSlot = (day: Date, minute: number) => {
     const slot = new Date(day);
@@ -165,8 +153,6 @@ export default function CalendarPage() {
     });
   }, [anchorDate, viewMode]);
 
-  const now = new Date();
-
   return (
     <div className="space-y-3">
       <CalendarToolbar
@@ -208,60 +194,15 @@ export default function CalendarPage() {
               studentsMap={studentsMap}
             />
           ) : (
-            <div className="overflow-auto rounded-lg border">
-              <div className={`grid min-w-[840px] grid-cols-[72px_repeat(${visibleDays.length},minmax(0,1fr))]`}>
-                <div className="sticky left-0 top-0 z-30 border-b border-r bg-slate-50" />
-                {visibleDays.map((day) => {
-                  const isToday = day.toDateString() === now.toDateString();
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className={`sticky top-0 z-20 border-b px-2 py-2 text-center text-sm ${isToday ? "bg-blue-50 font-semibold text-blue-700" : "bg-slate-50 text-slate-700"}`}
-                    >
-                      {formatDayHeader(day)}
-                    </div>
-                  );
-                })}
-
-                <div className="sticky left-0 z-20 border-r bg-white">
-                  {timeLabels.map((minute) => (
-                    <div key={minute} className="h-16 border-b pr-2 pt-1 text-right text-xs text-slate-400">
-                      {minuteToLabel(minute)}
-                    </div>
-                  ))}
-                </div>
-
-                {visibleDays.map((day) => {
-                  const dayLessons = lessonsByDay.get(day.toDateString()) ?? [];
-                  return (
-                    <div key={day.toISOString()} className="relative border-r last:border-r-0">
-                      {timeLabels.map((minute) => (
-                        <button
-                          key={`${day.toISOString()}-${minute}`}
-                          className="h-16 w-full border-b hover:bg-slate-50"
-                          onClick={() => openCreateForSlot(day, minute)}
-                        />
-                      ))}
-
-                      {dayLessons.map((lesson) => {
-                        const { topPercent, heightPercent } = getLessonPosition(
-                          lesson.start_at,
-                          lesson.duration_min,
-                          visibleRange.startMinute,
-                          visibleRange.endMinute,
-                        );
-                        const studentName = studentsMap.get(lesson.student_id) || `Ученик #${lesson.student_id}`;
-                        return (
-                          <div key={lesson.id} className="absolute left-1 right-1" style={{ top: `${topPercent}%`, minHeight: `${heightPercent}%` }}>
-                            <LessonCard lesson={lesson} studentName={studentName} onClick={() => setEditLesson(lesson)} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <WeeklyTimeGrid
+              days={visibleDays}
+              lessonsByDay={lessonsByDay}
+              studentsMap={studentsMap}
+              startMinute={visibleRange.startMinute}
+              endMinute={visibleRange.endMinute}
+              onCreate={openCreateForSlot}
+              onOpenLesson={(lesson) => setEditLesson(lesson)}
+            />
           )}
           {loading ? <p className="mt-2 text-sm text-slate-500">Загружаем уроки...</p> : null}
         </div>
