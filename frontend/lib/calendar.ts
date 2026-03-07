@@ -1,4 +1,7 @@
 export const MINUTES_PER_DAY = 24 * 60;
+export const TIME_SLOT_MINUTES = 30;
+export const PIXELS_PER_HOUR = 64;
+export const MIN_EVENT_HEIGHT_PX = 28;
 
 export type CalendarViewMode = "day" | "3days" | "week" | "month";
 
@@ -87,6 +90,124 @@ export function getLessonPosition(startAt: string, durationMin: number, startMin
     topPercent: Math.max(-2, topPercent),
     heightPercent: Math.max(heightPercent, 4),
   };
+}
+
+export type CalendarLessonLike = {
+  id: number;
+  start_at: string;
+  duration_min: number;
+};
+
+export type PositionedLesson<T extends CalendarLessonLike> = {
+  lesson: T;
+  top: number;
+  height: number;
+  left: number;
+  width: number;
+};
+
+export function getMinutesFromStartOfDay(startAt: string) {
+  return getDayMinutes(startAt);
+}
+
+export function getEventPixelPosition(params: {
+  startMinute: number;
+  durationMinute: number;
+  rangeStartMinute: number;
+  pixelsPerMinute: number;
+  minHeightPx?: number;
+}) {
+  const top = Math.max(0, (params.startMinute - params.rangeStartMinute) * params.pixelsPerMinute);
+  const rawHeight = Math.max(params.durationMinute, 0) * params.pixelsPerMinute;
+  return {
+    top,
+    height: Math.max(rawHeight, params.minHeightPx ?? MIN_EVENT_HEIGHT_PX),
+  };
+}
+
+export function groupLessonsByDay<T extends { start_at: string }>(lessons: T[]) {
+  const map = new Map<string, T[]>();
+  for (const lesson of lessons) {
+    const key = new Date(lesson.start_at).toDateString();
+    const list = map.get(key) ?? [];
+    list.push(lesson);
+    map.set(key, list);
+  }
+  return map;
+}
+
+function layoutOverlapCluster<T extends CalendarLessonLike>(
+  cluster: Array<{ lesson: T; start: number; end: number }>,
+  rangeStartMinute: number,
+  pixelsPerMinute: number,
+) {
+  const placed: Array<{ lesson: T; start: number; end: number; column: number; columns: number }> = [];
+  const columnEndMinutes: number[] = [];
+
+  for (const event of cluster) {
+    let column = columnEndMinutes.findIndex((endMinute) => endMinute <= event.start);
+    if (column === -1) {
+      column = columnEndMinutes.length;
+      columnEndMinutes.push(event.end);
+    } else {
+      columnEndMinutes[column] = event.end;
+    }
+    placed.push({ ...event, column, columns: 1 });
+  }
+
+  const totalColumns = Math.max(columnEndMinutes.length, 1);
+
+  return placed.map((event) => {
+    const position = getEventPixelPosition({
+      startMinute: event.start,
+      durationMinute: event.end - event.start,
+      rangeStartMinute,
+      pixelsPerMinute,
+    });
+    return {
+      lesson: event.lesson,
+      top: position.top,
+      height: position.height,
+      left: (event.column / totalColumns) * 100,
+      width: 100 / totalColumns,
+    };
+  });
+}
+
+export function layoutDayLessons<T extends CalendarLessonLike>(params: {
+  lessons: T[];
+  rangeStartMinute: number;
+  pixelsPerMinute: number;
+}) {
+  const normalized = params.lessons
+    .map((lesson) => {
+      const start = getMinutesFromStartOfDay(lesson.start_at);
+      const end = start + Math.max(lesson.duration_min, 1);
+      return { lesson, start, end };
+    })
+    .sort((a, b) => (a.start === b.start ? a.end - b.end : a.start - b.start));
+
+  const result: PositionedLesson<T>[] = [];
+  let cluster: Array<{ lesson: T; start: number; end: number }> = [];
+  let clusterEnd = -1;
+
+  for (const event of normalized) {
+    if (cluster.length === 0 || event.start < clusterEnd) {
+      cluster.push(event);
+      clusterEnd = Math.max(clusterEnd, event.end);
+      continue;
+    }
+
+    result.push(...layoutOverlapCluster(cluster, params.rangeStartMinute, params.pixelsPerMinute));
+    cluster = [event];
+    clusterEnd = event.end;
+  }
+
+  if (cluster.length > 0) {
+    result.push(...layoutOverlapCluster(cluster, params.rangeStartMinute, params.pixelsPerMinute));
+  }
+
+  return result;
 }
 
 export function formatRangeTitle(anchorDate: Date, mode: CalendarViewMode) {

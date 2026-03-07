@@ -5,7 +5,16 @@ import type { CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, Menu, Plus, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { CalendarViewMode, formatDayHeader, minuteToLabel } from "@/lib/calendar";
+import type { LessonItem } from "@/lib/api";
+import {
+  CalendarViewMode,
+  MIN_EVENT_HEIGHT_PX,
+  PIXELS_PER_HOUR,
+  TIME_SLOT_MINUTES,
+  formatDayHeader,
+  layoutDayLessons,
+  minuteToLabel,
+} from "@/lib/calendar";
 
 const FILTER_ITEMS = [
   { key: "all", label: "Все занятия" },
@@ -271,6 +280,126 @@ export function MonthGrid({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+type WeeklyGridLesson = LessonItem;
+
+export function WeeklyTimeGrid({
+  days,
+  lessonsByDay,
+  studentsMap,
+  startMinute,
+  endMinute,
+  onCreate,
+  onOpenLesson,
+}: {
+  days: Date[];
+  lessonsByDay: Map<string, WeeklyGridLesson[]>;
+  studentsMap: Map<number, string>;
+  startMinute: number;
+  endMinute: number;
+  onCreate: (day: Date, minute: number) => void;
+  onOpenLesson: (lesson: WeeklyGridLesson) => void;
+}) {
+  const slots = Array.from({ length: Math.ceil((endMinute - startMinute) / TIME_SLOT_MINUTES) + 1 }).map((_, index) => startMinute + index * TIME_SLOT_MINUTES);
+  const pixelsPerMinute = PIXELS_PER_HOUR / 60;
+  const gridHeight = Math.max((endMinute - startMinute) * pixelsPerMinute, 420);
+  const now = new Date();
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
+  const showNowLine = nowMinute >= startMinute && nowMinute <= endMinute;
+  const nowOffset = (nowMinute - startMinute) * pixelsPerMinute;
+
+  return (
+    <div className="h-[calc(100vh-220px)] overflow-auto rounded-lg border">
+      <div className={`grid min-w-[860px] grid-cols-[72px_repeat(${days.length},minmax(0,1fr))]`}>
+        <div className="sticky left-0 top-0 z-40 border-b border-r bg-white" />
+        {days.map((day) => {
+          const isToday = day.toDateString() === now.toDateString();
+          return (
+            <div
+              key={day.toISOString()}
+              className={`sticky top-0 z-30 border-b px-2 py-2 text-center text-sm ${
+                isToday ? "bg-blue-50 font-semibold text-blue-700" : "bg-white text-slate-700"
+              }`}
+            >
+              {formatDayHeader(day)}
+            </div>
+          );
+        })}
+
+        <div className="sticky left-0 z-30 border-r bg-white">
+          <div style={{ height: gridHeight }} className="relative">
+            {slots.map((minute) => {
+              const top = (minute - startMinute) * pixelsPerMinute;
+              const isHour = minute % 60 === 0;
+              return (
+                <div
+                  key={`time-${minute}`}
+                  className={`absolute right-2 text-right text-xs ${isHour ? "text-slate-500" : "text-slate-300"}`}
+                  style={{ top: Math.max(0, top - 8) }}
+                >
+                  {isHour ? minuteToLabel(minute) : ""}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {days.map((day) => {
+          const dayLessons = lessonsByDay.get(day.toDateString()) ?? [];
+          const positioned = layoutDayLessons({
+            lessons: dayLessons,
+            rangeStartMinute: startMinute,
+            pixelsPerMinute,
+          });
+          const isToday = day.toDateString() === now.toDateString();
+
+          return (
+            <div key={day.toISOString()} className={`relative border-r last:border-r-0 ${isToday ? "bg-blue-50/20" : "bg-white"}`} style={{ height: gridHeight }}>
+              {slots.map((minute) => {
+                const top = (minute - startMinute) * pixelsPerMinute;
+                const isHour = minute % 60 === 0;
+                return (
+                  <button
+                    key={`${day.toISOString()}-${minute}`}
+                    className={`absolute left-0 right-0 border-t transition hover:bg-slate-100/70 ${isHour ? "border-slate-200" : "border-slate-100"}`}
+                    style={{ top, height: TIME_SLOT_MINUTES * pixelsPerMinute }}
+                    onClick={() => onCreate(day, minute)}
+                    aria-label={`Создать занятие на ${formatDayHeader(day, true)} ${minuteToLabel(minute)}`}
+                  />
+                );
+              })}
+
+              {showNowLine && isToday ? (
+                <div className="absolute left-0 right-0 z-20 border-t-2 border-rose-500" style={{ top: nowOffset }}>
+                  <span className="absolute -left-1 -top-1.5 h-3 w-3 rounded-full bg-rose-500" />
+                </div>
+              ) : null}
+
+              {positioned.map((item) => {
+                const studentName = studentsMap.get(item.lesson.student_id) || `Ученик #${item.lesson.student_id}`;
+                return (
+                  <div
+                    key={item.lesson.id}
+                    className="absolute z-30 px-1"
+                    style={{
+                      top: item.top,
+                      height: item.height,
+                      left: `${item.left}%`,
+                      width: `${item.width}%`,
+                      minHeight: MIN_EVENT_HEIGHT_PX,
+                    }}
+                  >
+                    <LessonCard lesson={item.lesson} studentName={studentName} onClick={() => onOpenLesson(item.lesson)} style={{ height: "100%" }} />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
