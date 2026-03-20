@@ -9,22 +9,19 @@ fi
 RUN_DIR="$1"
 
 CODER_ANSWER="$RUN_DIR/03_coder_answer.txt"
+SANITIZED_CODER_ANSWER="$RUN_DIR/03_coder_answer_sanitized.txt"
 TESTER_TEMPLATE="$RUN_DIR/04_tester_prompt_template.txt"
 TESTER_PROMPT="$RUN_DIR/04_tester_prompt.txt"
 
-if [ ! -f "$CODER_ANSWER" ]; then
-  echo "missing file: $CODER_ANSWER" >&2
-  exit 1
-fi
+test -f "$CODER_ANSWER"
+test -f "$TESTER_TEMPLATE"
 
-if [ ! -f "$TESTER_TEMPLATE" ]; then
-  echo "missing file: $TESTER_TEMPLATE" >&2
-  exit 1
-fi
-
-python3 automation/bin/build_tester_prompt.py "$TESTER_TEMPLATE" "$CODER_ANSWER" "$TESTER_PROMPT"
+python3 automation/bin/normalize_coder_answer.py "$CODER_ANSWER" "$SANITIZED_CODER_ANSWER"
+python3 automation/bin/build_tester_prompt.py "$TESTER_TEMPLATE" "$SANITIZED_CODER_ANSWER" "$TESTER_PROMPT"
 
 echo "ready:"
-echo "  $TESTER_PROMPT"
+printf '  %s\n' \
+  "$SANITIZED_CODER_ANSWER" \
+  "$TESTER_PROMPT"
 echo
 sed -n '1,260p' "$TESTER_PROMPT"
