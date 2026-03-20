@@ -7,7 +7,6 @@ if [ $# -ne 1 ]; then
 fi
 
 RUN_DIR="$1"
-
 test -d "$RUN_DIR"
 
 echo "RUN_DIR=$RUN_DIR"
@@ -30,16 +29,4 @@ do
 done
 
 echo
-if [ -f "$RUN_DIR/04_tester_answer.txt" ]; then
-  echo "Стадия: chain complete"
-elif [ -f "$RUN_DIR/04_tester_prompt.txt" ]; then
-  echo "Стадия: waiting tester answer"
-elif [ -f "$RUN_DIR/03_coder_answer.txt" ]; then
-  echo "Стадия: ready to build tester prompt"
-elif [ -f "$RUN_DIR/03_coder_prompt.txt" ]; then
-  echo "Стадия: waiting coder answer"
-elif [ -f "$RUN_DIR/02_architect_answer.txt" ]; then
-  echo "Стадия: ready to build coder prompt"
-else
-  echo "Стадия: waiting architect answer"
-fi
+automation/bin/next_agent_step.sh "$RUN_DIR"
