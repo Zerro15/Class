@@ -19,6 +19,16 @@ FORBIDDEN_SNIPPETS = [
     "=== CONTEXT ===",
     "=== CODER RESULT ===",
     "...вставь настоящий ответ Tester...",
+    "<вставь реальный ответ Tester>",
+]
+
+PLACEHOLDER_PATTERNS = [
+    r"(?i)<[^>\n]{0,120}>",              # любые угловые плейсхолдеры
+    r"(?i)\bвставь\b",                   # “вставь …”
+    r"(?i)\bplaceholder\b",
+    r"(?i)\btodo\b",
+    r"(?m)^\.\.\.\s*$",                  # строка из троеточия
+    r"(?m)^<.*>$",                       # строка целиком в <...>
 ]
 
 if len(sys.argv) != 2:
@@ -66,39 +76,12 @@ if found_forbidden:
         print(f"  {s}")
     sys.exit(1)
 
-for line in text.splitlines():
-    s = line.strip()
-    if s == "..." or s.startswith("...") or s.endswith("..."):
+for pattern in PLACEHOLDER_PATTERNS:
+    m = re.search(pattern, text)
+    if m:
         print("INVALID")
         print(f"file: {path}")
-        print(f"reason: placeholder content detected: {s!r}")
-        sys.exit(1)
-
-sections = {}
-for i, header in enumerate(REQUIRED_HEADERS):
-    start = re.search(rf"(?m)^{re.escape(header)}\s*$", text)
-    if start is None:
-        continue
-    start_idx = start.end()
-    end_idx = len(text)
-    for next_header in REQUIRED_HEADERS[i + 1:]:
-        nxt = re.search(rf"(?m)^{re.escape(next_header)}\s*$", text[start_idx:])
-        if nxt is not None:
-            end_idx = start_idx + nxt.start()
-            break
-    body = text[start_idx:end_idx].strip()
-    sections[header] = body
-
-for header, body in sections.items():
-    if not body:
-        print("INVALID")
-        print(f"file: {path}")
-        print(f"reason: empty section body for {header}")
-        sys.exit(1)
-    if body in {"...", "…"}:
-        print("INVALID")
-        print(f"file: {path}")
-        print(f"reason: placeholder-only section body for {header}")
+        print(f"reason: contains placeholder-like content: {m.group(0)!r}")
         sys.exit(1)
 
 print("VALID")
