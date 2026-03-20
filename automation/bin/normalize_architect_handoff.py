@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -17,21 +16,24 @@ dst = Path(sys.argv[2])
 
 text = src.read_text(encoding="utf-8")
 
-bad_patterns = [
-    r".*NestJS.*",
-    r".*@UseGuards.*",
-    r".*JwtAuthGuard.*",
-    r".*JwtStrategy.*",
-    r".*@nestjs.*",
-    r".*PassportStrategy.*",
-    r".*AuthGuard.*",
-    r".*controllers/auth\.controller\.ts.*",
-    r".*auth\.module\.ts.*",
-    r".*dto/get-me-response\.dto\.ts.*",
-    r".*Swagger.*",
-    r".*OpenAPI.*",
-    r".*Logger.*NestJS.*",
-    r".*src/.*",
+bad_tokens = [
+    "NestJS",
+    "@UseGuards",
+    "JwtAuthGuard",
+    "JwtStrategy",
+    "@nestjs",
+    "PassportStrategy",
+    "AuthGuard",
+    "controllers/auth.controller.ts",
+    "auth.module.ts",
+    "dto/get-me-response.dto.ts",
+    "GetMeResponseDto",
+    "Swagger",
+    "OpenAPI",
+    "ApiBearerAuth",
+    "ApiResponse",
+    "ApiOperation",
+    "src/",
 ]
 
 cleaned: list[str] = []
@@ -39,7 +41,7 @@ for line in text.splitlines():
     s = line.strip()
     if not s:
         continue
-    if any(re.fullmatch(pattern, s) for pattern in bad_patterns):
+    if any(token in s for token in bad_tokens):
         continue
     cleaned.append(s)
 

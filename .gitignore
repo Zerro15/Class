@@ -1,7 +1,18 @@
-# local automation outputs
+.env
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+backend/.venv/
+backend/.pytest_cache/
+
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+frontend/package-lock.json
+
 automation/artifacts/run_*/
 automation/artifacts/*.txt
 automation/prompts/
-
-# frontend local lockfile if not tracked intentionally
-frontend/package-lock.json
