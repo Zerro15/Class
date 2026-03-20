@@ -1,19 +1,7 @@
-.vscode/
-**/.vscode/
-node_modules/
-__pycache__/
-*.pyc
-.env
-dist/
-build/
+# local automation outputs
+automation/artifacts/run_*/
+automation/artifacts/*.txt
+automation/prompts/
 
-# local backups
-backups/
-
-# local venvs
-backend/.venv/
-.venv/
-
-# Next.js build
-frontend/.next/
-frontend/tsconfig.tsbuildinfo
+# frontend local lockfile if not tracked intentionally
+frontend/package-lock.json
