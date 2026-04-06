@@ -6,7 +6,7 @@ from celery import Celery
 from app.core.config import get_settings
 
 # Настройка окружения
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
+# os.environ.setdefault("DJANGO_SETTINGS_MODULE", "app.settings")
 
 settings = get_settings()
 

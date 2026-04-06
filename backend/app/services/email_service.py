@@ -55,11 +55,10 @@ def send_email(
 # Импортируем celery_app из main.py для использования в задачах
 import sys
 sys.path.append('/app')
-from app.celery_app import celery_app
 
 
 # Celery task для отправки уведозлений
-@celery_app.task
+# @celery_app.task
 def _send_notification_async(notification_id: int, student_email: str, message: str, sent_via: str):
     """Async task for sending notifications"""
     from app.models.notification import Notification

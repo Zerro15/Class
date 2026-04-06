@@ -59,5 +59,25 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
+
+  celery-worker:
+    build:
+      context: ./backend
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      TAX_PERCENT_DEFAULT: ${TAX_PERCENT_DEFAULT}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
+
 volumes:
   postgres_data:

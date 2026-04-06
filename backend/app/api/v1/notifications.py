@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -128,8 +128,17 @@ def schedule_lesson_reminder(
         .filter(Student.id == lesson.student_id, Student.owner_id == current_user.id)
         .first()
     )
-    if not student or not student.email:
+    if not student:
         return
+
+    # Для email-уведомлений нужен контакт (в текущей модели используем name как fallback для SMS/push)
+    contact_info = None
+    if reminder_type == "email":
+        # У студента пока нет email поля, используем placeholder
+        contact_info = f"student_{student.id}@example.com"
+    else:
+        # Для SMS/push используем имя студента как контакт
+        contact_info = student.name
 
     message = f"Напоминание: урок с {student.name} завтра в {lesson.start_at.strftime('%H:%M')}"
 
@@ -149,7 +158,7 @@ def schedule_lesson_reminder(
     _send_notification_async.apply_async(
         kwargs={
             "notification_id": notification.id,
-            "student_email": student.email,
+            "student_email": contact_info,
             "message": message,
             "sent_via": reminder_type,
         },
@@ -178,8 +187,17 @@ def schedule_lesson_reminder_api(
         .filter(Student.id == lesson.student_id, Student.owner_id == current_user.id)
         .first()
     )
-    if not student or not student.email:
-        raise HTTPException(status_code=400, detail="Student email not found")
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Для email-уведомлений нужен контакт (в текущей модели используем name как fallback для SMS/push)
+    contact_info = None
+    if reminder_type == "email":
+        # У студента пока нет email поля, используем placeholder
+        contact_info = f"student_{student.id}@example.com"
+    else:
+        # Для SMS/push используем имя студента как контакт
+        contact_info = student.name
 
     message = f"Напоминание: урок с {student.name} завтра в {lesson.start_at.strftime('%H:%M')}"
 
@@ -195,16 +213,13 @@ def schedule_lesson_reminder_api(
     db.add(notification)
     db.commit()
 
-    # Запланируем отправку
+    # Отправляем уведомление (синхронно, так как _send_notification_async не Celery task)
     from app.services.email_service import _send_notification_async
-    _send_notification_async.apply_async(
-        kwargs={
-            "notification_id": notification.id,
-            "student_email": student.email,
-            "message": message,
-            "sent_via": reminder_type,
-        },
-        countdown=delay_hours * 3600,
+    _send_notification_async(
+        notification_id=notification.id,
+        student_email=contact_info,
+        message=message,
+        sent_via=reminder_type,
     )
 
     return {"status": "reminder_scheduled", "lesson_id": lesson_id, "delay_hours": delay_hours}
