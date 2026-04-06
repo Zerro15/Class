@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.homework import Homework
 from app.models.lesson import Lesson
+from app.models.lesson_series import LessonSeries
 from app.models.payment import Payment
 from app.models.settings import Settings
 from app.models.student import Student
@@ -15,6 +16,13 @@ from app.schemas.lesson import LessonCreate, LessonOut, LessonUpdate
 from app.schemas.payment import PaymentCreate, PaymentOut, PaymentUpdate
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
+
+
+def apply_lesson_projection(lesson: Lesson, student_name: str | None = None) -> Lesson:
+    lesson.student_name = student_name
+    lesson.is_paid = lesson.payment.is_paid if lesson.payment else None
+    lesson.is_homework_sent = lesson.homework.is_sent if lesson.homework else None
+    return lesson
 
 
 def get_lesson_or_404(db: Session, lesson_id: int, owner_id: int) -> Lesson:
@@ -32,25 +40,39 @@ def get_lesson_or_404(db: Session, lesson_id: int, owner_id: int) -> Lesson:
 def list_lessons(
     from_date: datetime | None = Query(None, alias="from"),
     to_date: datetime | None = Query(None, alias="to"),
+    student_id: int | None = None,
+    status_value: str | None = Query(None, alias="status"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[LessonOut]:
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="'from' must be earlier than or equal to 'to'",
+        )
+
+    if status_value is not None and status_value not in {"scheduled", "done", "canceled"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid status filter",
+        )
+
     query = db.query(Lesson).filter(Lesson.owner_id == current_user.id)
     if from_date:
         query = query.filter(Lesson.start_at >= from_date)
     if to_date:
         query = query.filter(Lesson.start_at <= to_date)
+    if student_id is not None:
+        query = query.filter(Lesson.student_id == student_id)
+    if status_value is not None:
+        query = query.filter(Lesson.status == status_value)
     lessons = query.order_by(Lesson.start_at.asc()).all()
-    # Комментарий наставника: добавляем student_name/is_paid/is_homework_sent на backend, чтобы календарь не делал N+1 запросы по каждой карточке.
     student_map = {
         row.id: row.name
         for row in db.query(Student.id, Student.name).filter(Student.owner_id == current_user.id).all()
     }
     for lesson in lessons:
-        lesson.student_name = student_map.get(lesson.student_id)
-        lesson.is_paid = lesson.payment.is_paid if lesson.payment else None
-        lesson.is_homework_sent = lesson.homework.is_sent if lesson.homework else None
-        lesson.series_id = None
+        apply_lesson_projection(lesson, student_map.get(lesson.student_id))
     return lessons
 
 
@@ -60,7 +82,13 @@ def get_lesson(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
-    return get_lesson_or_404(db, lesson_id, current_user.id)
+    lesson = get_lesson_or_404(db, lesson_id, current_user.id)
+    student = (
+        db.query(Student)
+        .filter(Student.id == lesson.student_id, Student.owner_id == current_user.id)
+        .first()
+    )
+    return apply_lesson_projection(lesson, student.name if student else None)
 
 
 @router.post("", response_model=LessonOut, status_code=status.HTTP_201_CREATED)
@@ -102,30 +130,69 @@ def update_lesson(
     current_user: User = Depends(get_current_user),
 ) -> LessonOut:
     lesson = get_lesson_or_404(db, lesson_id, current_user.id)
-    if payload.student_id is not None:
+    original_start_at = lesson.start_at
+    updates = payload.model_dump(exclude_unset=True)
+    apply_to_future = updates.pop("apply_to_future", False)
+
+    student_id = updates.get("student_id")
+    if student_id is not None:
         student = (
             db.query(Student)
-            .filter(Student.id == payload.student_id, Student.owner_id == current_user.id)
+            .filter(Student.id == student_id, Student.owner_id == current_user.id)
             .first()
         )
         if not student:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-        lesson.student_id = payload.student_id
-    if payload.start_at is not None:
-        lesson.start_at = payload.start_at
-    if payload.duration_min is not None:
-        lesson.duration_min = payload.duration_min
-    if payload.status is not None:
-        lesson.status = payload.status.value
-    if payload.topic is not None:
-        lesson.topic = payload.topic
-    if payload.price is not None:
-        lesson.price = payload.price
-    if payload.is_archived is not None:
-        lesson.is_archived = payload.is_archived
+
+    if "status" in updates and updates["status"] is not None:
+        updates["status"] = updates["status"].value
+
+    for field, value in updates.items():
+        setattr(lesson, field, value)
+
+    if apply_to_future and lesson.series_id:
+        future_lessons = (
+            db.query(Lesson)
+            .filter(
+                Lesson.owner_id == current_user.id,
+                Lesson.series_id == lesson.series_id,
+                Lesson.start_at > original_start_at,
+            )
+            .all()
+        )
+        future_shift = None
+        if "start_at" in updates and updates["start_at"] is not None:
+            future_shift = updates["start_at"] - original_start_at
+
+        propagated_fields = {"student_id", "duration_min", "topic", "price"}
+        for future_lesson in future_lessons:
+            for field in propagated_fields:
+                if field in updates:
+                    setattr(future_lesson, field, updates[field])
+            if future_shift is not None:
+                future_lesson.start_at = future_lesson.start_at + future_shift
+
+        series = (
+            db.query(LessonSeries)
+            .filter(LessonSeries.id == lesson.series_id, LessonSeries.owner_id == current_user.id)
+            .first()
+        )
+        if series:
+            for field in propagated_fields:
+                if field in updates:
+                    setattr(series, field, updates[field])
+            if "start_at" in updates and updates["start_at"] is not None:
+                series.weekday = updates["start_at"].weekday()
+                series.time_of_day = updates["start_at"].timetz().replace(tzinfo=None)
+
     db.commit()
     db.refresh(lesson)
-    return lesson
+    student = (
+        db.query(Student)
+        .filter(Student.id == lesson.student_id, Student.owner_id == current_user.id)
+        .first()
+    )
+    return apply_lesson_projection(lesson, student.name if student else None)
 
 
 @router.post("/{lesson_id}/payment", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
@@ -165,12 +232,11 @@ def update_payment(
     if not payment:
         payment = Payment(lesson_id=lesson.id)
         db.add(payment)
-    payment.is_paid = payload.is_paid
-    payment.paid_amount = payload.paid_amount
-    payment.paid_at = payload.paid_at
-    payment.is_transferred = payload.is_transferred
-    payment.transferred_amount = payload.transferred_amount
-    payment.transferred_at = payload.transferred_at
+
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(payment, field, value)
+
     db.commit()
     db.refresh(payment)
     return payment
@@ -211,10 +277,11 @@ def update_homework(
     if not homework:
         homework = Homework(lesson_id=lesson.id)
         db.add(homework)
-    homework.text = payload.text
-    homework.link = payload.link
-    homework.is_sent = payload.is_sent
-    homework.sent_at = payload.sent_at
+
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(homework, field, value)
+
     db.commit()
     db.refresh(homework)
     return homework

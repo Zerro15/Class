@@ -16,8 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Комментарий наставника: здесь держим все роутеры вместе, чтобы merge разных фич
-# не выключал части продукта по ошибке (settings/series/dashboard и т.д.).
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(students.router, prefix=settings.api_v1_prefix)
 app.include_router(lessons.router, prefix=settings.api_v1_prefix)

@@ -65,10 +65,9 @@ def update_student(
     )
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-    if payload.name is not None:
-        student.name = payload.name
-    if payload.notes is not None:
-        student.notes = payload.notes
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(student, field, value)
     db.commit()
     db.refresh(student)
     return student

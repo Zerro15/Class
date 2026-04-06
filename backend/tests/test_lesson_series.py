@@ -115,3 +115,66 @@ def test_apply_series_patch_future_only(client: TestClient) -> None:
     assert past and future
     assert all(item["duration_min"] == 60 for item in past)
     assert all(item["duration_min"] == 90 for item in future)
+
+
+def test_delete_series_detaches_existing_lessons(client: TestClient) -> None:
+    token = register_user(client, "series-delete@example.com")
+    student_id = create_student(client, token)
+    series_id = create_series(client, token, student_id, 0, "18:00:00")
+
+    apply_resp = client.post(
+        "/api/v1/schedule/apply",
+        headers=auth_headers(token),
+        json={"week_start": "2026-03-02", "days": 14, "strategy": "skip_existing"},
+    )
+    assert apply_resp.status_code == 200
+    assert apply_resp.json()["created"] == 2
+
+    delete_resp = client.delete(
+        f"/api/v1/lesson-series/{series_id}",
+        headers=auth_headers(token),
+    )
+    assert delete_resp.status_code == 204
+
+    lessons_resp = client.get(
+        "/api/v1/lessons",
+        headers=auth_headers(token),
+        params={"from": "2026-03-01T00:00:00+00:00", "to": "2026-03-20T00:00:00+00:00"},
+    )
+    assert lessons_resp.status_code == 200
+    lessons = lessons_resp.json()
+    assert len(lessons) == 2
+    assert all(item["series_id"] is None for item in lessons)
+    assert all(item["status"] == "scheduled" for item in lessons)
+
+
+def test_delete_series_can_cancel_future_lessons(client: TestClient) -> None:
+    token = register_user(client, "series-delete-cancel@example.com")
+    student_id = create_student(client, token)
+    series_id = create_series(client, token, student_id, 4, "18:00:00")
+
+    apply_resp = client.post(
+        "/api/v1/schedule/apply",
+        headers=auth_headers(token),
+        json={"week_start": "2099-01-05", "days": 14, "strategy": "skip_existing"},
+    )
+    assert apply_resp.status_code == 200
+    assert apply_resp.json()["created"] == 2
+
+    delete_resp = client.delete(
+        f"/api/v1/lesson-series/{series_id}",
+        headers=auth_headers(token),
+        params={"future_action": "cancel"},
+    )
+    assert delete_resp.status_code == 204
+
+    lessons_resp = client.get(
+        "/api/v1/lessons",
+        headers=auth_headers(token),
+        params={"from": "2099-01-01T00:00:00+00:00", "to": "2099-01-31T00:00:00+00:00"},
+    )
+    assert lessons_resp.status_code == 200
+    lessons = lessons_resp.json()
+    assert len(lessons) == 2
+    assert all(item["series_id"] is None for item in lessons)
+    assert all(item["status"] == "canceled" for item in lessons)

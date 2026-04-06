@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useToast } from "@/app/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { CalendarSidebar, CalendarToolbar, LessonFilter, MonthGrid, WeeklyTimeGrid } from "@/app/calendar/components/workspace";
 import { api, LessonItem } from "@/lib/api";
@@ -19,7 +20,21 @@ import {
 
 const DEFAULT_FORM = { student_id: "", topic: "", duration_min: "60", price: "0", status: "scheduled" };
 
+function CalendarSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
+        <div className="h-3 w-24 rounded-full bg-slate-200" />
+        <div className="mt-4 h-10 w-1/2 rounded-2xl bg-slate-200" />
+        <div className="mt-3 h-4 w-2/3 rounded-full bg-slate-100" />
+      </div>
+      <div className="h-[calc(100vh-220px)] rounded-[32px] border border-slate-200 bg-white/90 shadow-sm" />
+    </div>
+  );
+}
+
 export default function CalendarPage() {
+  const { showToast } = useToast();
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
   const [anchorDate, setAnchorDate] = useState(() => getCalendarAnchor(new Date(), "week"));
   const [lessons, setLessons] = useState<LessonItem[]>([]);
@@ -111,35 +126,59 @@ export default function CalendarPage() {
 
   const submitCreate = async () => {
     if (!createAt || !form.student_id) return;
-    await api.createLesson({
-      student_id: Number(form.student_id),
-      start_at: createAt.toISOString(),
-      duration_min: Number(form.duration_min),
-      status: form.status,
-      topic: form.topic || null,
-      price: Number(form.price),
-    });
-    setCreateAt(null);
-    await loadLessons();
+    try {
+      setError(null);
+      await api.createLesson({
+        student_id: Number(form.student_id),
+        start_at: createAt.toISOString(),
+        duration_min: Number(form.duration_min),
+        status: form.status,
+        topic: form.topic || null,
+        price: Number(form.price),
+      });
+      setCreateAt(null);
+      showToast("Занятие создано", "success");
+      await loadLessons();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Не удалось создать занятие";
+      setError(message);
+      showToast(message, "error");
+    }
   };
 
   const submitEdit = async () => {
     if (!editLesson) return;
-    await api.updateLesson(editLesson.id, {
-      status: editLesson.status,
-      topic: editLesson.topic ?? null,
-      duration_min: editLesson.duration_min,
-      price: editLesson.price,
-    });
-    setEditLesson(null);
-    await loadLessons();
+    try {
+      setError(null);
+      await api.updateLesson(editLesson.id, {
+        status: editLesson.status,
+        topic: editLesson.topic ?? null,
+        duration_min: editLesson.duration_min,
+        price: editLesson.price,
+      });
+      setEditLesson(null);
+      showToast("Занятие обновлено", "success");
+      await loadLessons();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Не удалось обновить занятие";
+      setError(message);
+      showToast(message, "error");
+    }
   };
 
   const submitMove = async (newDateTime: string) => {
     if (!moveLesson) return;
-    await api.updateLesson(moveLesson.id, { start_at: new Date(newDateTime).toISOString() });
-    setMoveLesson(null);
-    await loadLessons();
+    try {
+      setError(null);
+      await api.updateLesson(moveLesson.id, { start_at: new Date(newDateTime).toISOString() });
+      setMoveLesson(null);
+      showToast("Занятие перенесено", "success");
+      await loadLessons();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Не удалось перенести занятие";
+      setError(message);
+      showToast(message, "error");
+    }
   };
 
   const monthDays = useMemo(() => {
@@ -153,8 +192,22 @@ export default function CalendarPage() {
     });
   }, [anchorDate, viewMode]);
 
+  if (loading && lessons.length === 0) {
+    return <CalendarSkeleton />;
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <section className="rounded-[32px] border border-slate-200 bg-white/90 shadow-sm">
+        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.22),_transparent_28%),linear-gradient(135deg,_#0f172a_0%,_#1e293b_100%)] px-6 py-7 text-white sm:px-8">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-sky-200">Календарь</p>
+          <h1 className="mt-4 text-3xl font-semibold leading-tight">Рабочее расписание по дням, неделям и месяцу</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+            Планируйте занятия на холсте, быстро создавайте новые слоты и правьте уроки прямо в контексте календаря.
+          </p>
+        </div>
+      </section>
+
       <CalendarToolbar
         title={title}
         viewMode={viewMode}
@@ -180,8 +233,8 @@ export default function CalendarPage() {
           onCreate={() => openCreateForSlot(new Date(), workdayStart)}
         />
 
-        <div className="min-w-0 flex-1 rounded-xl border bg-white p-3">
-          {error ? <p className="mb-2 text-sm text-rose-600">{error}</p> : null}
+        <div className="min-w-0 flex-1 rounded-[32px] border border-slate-200 bg-white/90 p-3 shadow-sm">
+          {error ? <p className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
           {viewMode === "month" ? (
             <MonthGrid
               days={monthDays}
@@ -204,7 +257,7 @@ export default function CalendarPage() {
               onOpenLesson={(lesson) => setEditLesson(lesson)}
             />
           )}
-          {loading ? <p className="mt-2 text-sm text-slate-500">Загружаем уроки...</p> : null}
+          {loading ? <p className="mt-3 text-sm text-slate-500">Обновляем календарь...</p> : null}
         </div>
       </div>
 
@@ -250,12 +303,17 @@ function LessonCreateModal({
   onChange: (next: { student_id: string; topic: string; duration_min: string; price: string; status: string }) => void;
   onSubmit: () => void;
 }) {
+  const inputClass =
+    "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
-        <h3 className="text-lg font-semibold">Быстрое создание урока</h3>
-        <p className="text-sm text-slate-500">{createAt.toLocaleString("ru-RU")}</p>
-        <select className="w-full rounded border px-3 py-2" value={form.student_id} onChange={(e) => onChange({ ...form, student_id: e.target.value })}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-md rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]">
+        <p className="text-sm font-medium text-sky-700">Новый урок</p>
+        <h3 className="mt-1 text-2xl font-semibold text-slate-900">Быстрое создание</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{createAt.toLocaleString("ru-RU")}</p>
+        <div className="mt-6 space-y-4">
+          <select className={inputClass} value={form.student_id} onChange={(e) => onChange({ ...form, student_id: e.target.value })}>
           <option value="">Выберите ученика</option>
           {students.map((student) => (
             <option value={student.id} key={student.id}>
@@ -263,16 +321,17 @@ function LessonCreateModal({
             </option>
           ))}
         </select>
-        <input className="w-full rounded border px-3 py-2" placeholder="Тема" value={form.topic} onChange={(e) => onChange({ ...form, topic: e.target.value })} />
-        <div className="grid grid-cols-2 gap-2">
-          <input className="rounded border px-3 py-2" type="number" value={form.duration_min} onChange={(e) => onChange({ ...form, duration_min: e.target.value })} />
-          <input className="rounded border px-3 py-2" type="number" value={form.price} onChange={(e) => onChange({ ...form, price: e.target.value })} />
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button onClick={onSubmit}>Создать</Button>
+          <input className={inputClass} placeholder="Тема" value={form.topic} onChange={(e) => onChange({ ...form, topic: e.target.value })} />
+          <div className="grid grid-cols-2 gap-3">
+            <input className={inputClass} type="number" value={form.duration_min} onChange={(e) => onChange({ ...form, duration_min: e.target.value })} />
+            <input className={inputClass} type="number" value={form.price} onChange={(e) => onChange({ ...form, price: e.target.value })} />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={onClose} className="rounded-2xl">
+              Отмена
+            </Button>
+            <Button onClick={onSubmit} className="rounded-2xl">Создать</Button>
+          </div>
         </div>
       </div>
     </div>
@@ -294,36 +353,41 @@ function LessonDetailsDrawer({
   onSubmit: () => void;
   onMove: () => void;
 }) {
+  const inputClass =
+    "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100";
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40">
-      <div className="ml-auto h-full w-full max-w-md space-y-3 border-l bg-white p-5 shadow-2xl">
-        {/* Комментарий наставника: drawer ускоряет правки из календаря и сохраняет контекст недели, а action-heavy операции остаются на dashboard. */}
-        <h3 className="text-lg font-semibold">Детали занятия</h3>
-        <p className="text-sm text-slate-500">{studentName}</p>
-        <input className="w-full rounded border px-3 py-2" value={lesson.topic ?? ""} onChange={(e) => onChange({ ...lesson, topic: e.target.value })} />
-        <select className="w-full rounded border px-3 py-2" value={lesson.status} onChange={(e) => onChange({ ...lesson, status: e.target.value as LessonItem["status"] })}>
+    <div className="fixed inset-0 z-50 bg-slate-950/45">
+      <div className="ml-auto h-full w-full max-w-md border-l border-slate-200 bg-white p-6 shadow-2xl">
+        <p className="text-sm font-medium text-sky-700">Занятие</p>
+        <h3 className="mt-1 text-2xl font-semibold text-slate-900">Детали урока</h3>
+        <p className="mt-2 text-sm text-slate-500">{studentName}</p>
+        <div className="mt-6 space-y-4">
+          <input className={inputClass} value={lesson.topic ?? ""} onChange={(e) => onChange({ ...lesson, topic: e.target.value })} />
+          <select className={inputClass} value={lesson.status} onChange={(e) => onChange({ ...lesson, status: e.target.value as LessonItem["status"] })}>
           <option value="scheduled">Запланировано</option>
           <option value="done">Проведено</option>
           <option value="canceled">Отменено</option>
         </select>
-        <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
           <input
-            className="rounded border px-3 py-2"
+            className={inputClass}
             type="number"
             value={lesson.duration_min}
             onChange={(e) => onChange({ ...lesson, duration_min: Number(e.target.value) })}
           />
-          <input className="rounded border px-3 py-2" type="number" value={lesson.price} onChange={(e) => onChange({ ...lesson, price: Number(e.target.value) })} />
-        </div>
-        <div className="flex justify-between gap-2 pt-2">
-          <Button variant="outline" onClick={onMove}>
-            Перенести
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Отмена
+            <input className={inputClass} type="number" value={lesson.price} onChange={(e) => onChange({ ...lesson, price: Number(e.target.value) })} />
+          </div>
+          <div className="flex justify-between gap-2 pt-2">
+            <Button variant="outline" onClick={onMove} className="rounded-2xl">
+              Перенести
             </Button>
-            <Button onClick={onSubmit}>Сохранить</Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={onClose}>
+                Отмена
+              </Button>
+              <Button onClick={onSubmit} className="rounded-2xl">Сохранить</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -339,15 +403,23 @@ function MoveModal({ lesson, onClose, onSave }: { lesson: LessonItem; onClose: (
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md space-y-3 rounded-xl bg-white p-5">
-        <h3 className="text-lg font-semibold">Перенос урока</h3>
-        <input className="w-full rounded border px-3 py-2" type="datetime-local" value={value} onChange={(e) => setValue(e.target.value)} />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button onClick={() => void onSave(value)}>Сохранить</Button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div className="w-full max-w-md rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.22)]">
+        <p className="text-sm font-medium text-sky-700">Перенос</p>
+        <h3 className="mt-1 text-2xl font-semibold text-slate-900">Перенести урок</h3>
+        <div className="mt-6 space-y-4">
+          <input
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+            type="datetime-local"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={onClose} className="rounded-2xl">
+              Отмена
+            </Button>
+            <Button onClick={() => void onSave(value)} className="rounded-2xl">Сохранить</Button>
+          </div>
         </div>
       </div>
     </div>

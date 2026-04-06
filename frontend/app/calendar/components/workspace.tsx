@@ -52,7 +52,7 @@ export function CalendarToolbar({
   ];
 
   return (
-    <div className="sticky top-0 z-30 rounded-xl border bg-white/95 p-3 backdrop-blur">
+    <div className="sticky top-0 z-30 rounded-[28px] border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={onToggleSidebar} aria-label="Показать или скрыть календарную панель" className="h-9 w-9 px-0">
@@ -84,10 +84,10 @@ export function CalendarToolbar({
               </button>
             ))}
           </div>
-          <Button variant="outline" aria-label="Поиск и фильтры" className="h-9 w-9 px-0">
+          <Button variant="outline" aria-label="Поиск и фильтры" className="h-9 w-9 px-0 rounded-2xl">
             <Search className="h-4 w-4" />
           </Button>
-          <Button onClick={onCreate} className="gap-2">
+          <Button onClick={onCreate} className="gap-2 rounded-2xl">
             <Plus className="h-4 w-4" />
             Создать
           </Button>
@@ -128,8 +128,8 @@ export function CalendarSidebar({
   onCreate: () => void;
 }) {
   if (isCollapsed) {
-    return (
-      <div className="flex w-14 shrink-0 flex-col items-center gap-2 rounded-xl border bg-white p-2">
+      return (
+      <div className="flex w-14 shrink-0 flex-col items-center gap-2 rounded-[24px] border border-slate-200 bg-white/90 p-2 shadow-sm">
         <Button variant="outline" onClick={onToggle} aria-label="Развернуть панель" className="h-9 w-9 px-0">
           <Menu className="h-4 w-4" />
         </Button>
@@ -144,10 +144,9 @@ export function CalendarSidebar({
   const monthEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
 
   return (
-    <aside className="w-72 shrink-0 space-y-4 rounded-xl border bg-white p-4">
-      {/* Комментарий наставника: локальная collapsible-панель внутри calendar-page экономит место и не вмешивается в глобальный app shell. */}
+    <aside className="w-72 shrink-0 space-y-4 rounded-[28px] border border-slate-200 bg-white/90 p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <Button onClick={onCreate} className="gap-2">
+        <Button onClick={onCreate} className="gap-2 rounded-2xl">
           <Plus className="h-4 w-4" />
           Создать занятие
         </Button>
@@ -156,7 +155,7 @@ export function CalendarSidebar({
         </Button>
       </div>
 
-      <div className="rounded-lg border p-3">
+      <div className="rounded-2xl border border-slate-200 p-3">
         <p className="mb-2 text-sm font-semibold capitalize text-slate-800">
           {selectedDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
         </p>
@@ -181,7 +180,7 @@ export function CalendarSidebar({
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border p-3">
+      <div className="space-y-2 rounded-2xl border border-slate-200 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Фильтры</p>
         {FILTER_ITEMS.map((item) => (
           <button
@@ -196,7 +195,7 @@ export function CalendarSidebar({
         ))}
       </div>
 
-      <div className="space-y-2 rounded-lg border p-3">
+      <div className="space-y-2 rounded-2xl border border-slate-200 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ученик</p>
         <select className="w-full rounded-md border px-2 py-2 text-sm" value={selectedStudentId} onChange={(event) => onStudent(event.target.value)}>
           <option value="all">Все ученики</option>
@@ -230,7 +229,6 @@ export function LessonCard({
 }) {
   return (
     <button className={`rounded-md border px-2 py-1.5 text-left text-xs shadow-sm ${LESSON_STYLE[lesson.status]}`} style={style} onClick={onClick}>
-      {/* Комментарий наставника: статус остаётся цветовым кодом — это ускоряет сканирование расписания без перегруза текста в карточке. */}
       <p className="font-medium">{studentName}</p>
       <p className="truncate">{lesson.topic || "Без темы"}</p>
       <p>{new Date(lesson.start_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>

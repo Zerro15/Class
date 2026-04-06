@@ -1,5 +1,7 @@
 import os
+import sys
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +11,9 @@ from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
 
 from app.api.deps import get_db  # noqa: E402
 from app.db.base import Base  # noqa: E402

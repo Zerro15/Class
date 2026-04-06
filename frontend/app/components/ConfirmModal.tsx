@@ -29,11 +29,9 @@ export function ConfirmModal({
         <h2 className="text-center text-lg font-semibold text-slate-900">{title}</h2>
         <p className="mt-2 text-center text-sm text-slate-600">{description}</p>
         <div className="mt-6 flex items-center justify-center gap-3">
-          {/* Комментарий наставника: нейтральная кнопка отмены снижает риск случайного подтверждения опасного действия. */}
           <Button type="button" variant="outline" onClick={onCancel}>
             {cancelText}
           </Button>
-          {/* Комментарий наставника: красная confirm-кнопка визуально сигнализирует, что действие критичное. */}
           <Button
             type="button"
             className="bg-rose-600 text-white hover:bg-rose-700"

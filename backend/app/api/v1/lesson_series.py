@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -31,6 +31,17 @@ def _ensure_student(db: Session, owner_id: int, student_id: int) -> None:
     )
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+
+def _get_series_or_404(db: Session, owner_id: int, series_id: int) -> LessonSeries:
+    row = (
+        db.query(LessonSeries)
+        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == owner_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    return row
 
 
 @router.get("", response_model=list[LessonSeriesOut])
@@ -67,13 +78,7 @@ def update_series(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LessonSeriesOut:
-    row = (
-        db.query(LessonSeries)
-        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == current_user.id)
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    row = _get_series_or_404(db, current_user.id, series_id)
     data = payload.model_dump(exclude_unset=True)
     if "student_id" in data and data["student_id"] is not None:
         _ensure_student(db, current_user.id, data["student_id"])
@@ -87,16 +92,25 @@ def update_series(
 @router.delete("/{series_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_series(
     series_id: int,
+    future_action: str = Query("detach"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    row = (
-        db.query(LessonSeries)
-        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == current_user.id)
-        .first()
+    if future_action not in {"detach", "cancel"}:
+        raise HTTPException(status_code=400, detail="Invalid future_action")
+
+    row = _get_series_or_404(db, current_user.id, series_id)
+    now = datetime.now(timezone.utc)
+    linked_lessons = (
+        db.query(Lesson)
+        .filter(Lesson.owner_id == current_user.id, Lesson.series_id == series_id)
+        .all()
     )
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    for lesson in linked_lessons:
+        if future_action == "cancel" and lesson.start_at >= now and lesson.status == "scheduled":
+            lesson.status = "canceled"
+        lesson.series_id = None
+
     db.delete(row)
     db.commit()
 
@@ -110,13 +124,7 @@ def apply_series_schedule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ApplyScheduleResponse:
-    series = (
-        db.query(LessonSeries)
-        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == current_user.id)
-        .first()
-    )
-    if not series:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    series = _get_series_or_404(db, current_user.id, series_id)
 
     days = payload.days if payload else 7
     week_start_date = payload.week_start if payload else datetime.now(timezone.utc).date()
@@ -199,8 +207,6 @@ def apply_schedule(
                 )
                 .first()
             )
-            # Комментарий наставника: ±1 минута защищает от дублей при повторном apply,
-            # даже если клиент/сервер немного сдвинули секунды или таймзону.
             if duplicate:
                 skipped += 1
                 continue
@@ -231,13 +237,7 @@ def apply_series_patch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ApplySeriesPatchResponse:
-    series = (
-        db.query(LessonSeries)
-        .filter(LessonSeries.id == series_id, LessonSeries.owner_id == current_user.id)
-        .first()
-    )
-    if not series:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Series not found")
+    series = _get_series_or_404(db, current_user.id, series_id)
 
     patch = payload.patch.model_dump(exclude_unset=True)
     if not patch:
@@ -252,7 +252,6 @@ def apply_series_patch(
         )
         .all()
     )
-    # Комментарий наставника: изменяем только будущие занятия серии, прошлые остаются историей фактических условий.
     for lesson in lessons:
         for key, value in patch.items():
             setattr(lesson, key, value)

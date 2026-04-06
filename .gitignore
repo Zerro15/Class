@@ -15,4 +15,12 @@ frontend/package-lock.json
 
 automation/artifacts/run_*/
 automation/artifacts/*.txt
+automation/artifacts/*/
 automation/prompts/
+
+# Database files
+backend/local.db
+
+# Frontend error pages (auto-generated)
+frontend/app/error.tsx
+frontend/app/global-error.tsx
