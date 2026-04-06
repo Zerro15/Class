@@ -19,3 +19,4 @@ class User(Base):
     students = relationship("Student", back_populates="owner", cascade="all, delete")
     lessons = relationship("Lesson", back_populates="owner", cascade="all, delete")
     settings = relationship("Settings", back_populates="owner", uselist=False)
+    notifications = relationship("Notification", back_populates="owner", cascade="all, delete-orphan")

@@ -29,3 +29,4 @@ class Lesson(Base):
     payment = relationship("Payment", back_populates="lesson", uselist=False)
     homework = relationship("Homework", back_populates="lesson", uselist=False)
     series = relationship("LessonSeries", back_populates="lessons")
+    notifications = relationship("Notification", back_populates="lesson", cascade="all, delete-orphan")

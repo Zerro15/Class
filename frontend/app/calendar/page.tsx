@@ -6,6 +6,7 @@ import { useToast } from "@/app/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { CalendarSidebar, CalendarToolbar, LessonFilter, MonthGrid, WeeklyTimeGrid } from "@/app/calendar/components/workspace";
 import { api, LessonItem } from "@/lib/api";
+import { LessonReminderButton } from "./components/reminder/LessonReminderButton";
 import {
   CalendarViewMode,
   formatRangeTitle,
@@ -387,6 +388,9 @@ function LessonDetailsDrawer({
                 Отмена
               </Button>
               <Button onClick={onSubmit} className="rounded-2xl">Сохранить</Button>
+            <div className="mt-4 pt-4 border-t">
+              <LessonReminderButton lesson={editLesson} />
+            </div>
             </div>
           </div>
         </div>

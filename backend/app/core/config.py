@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     database_url: str = Field(..., alias="DATABASE_URL")
     frontend_origin: str = Field("http://localhost:3000", alias="FRONTEND_ORIGIN")
     tax_percent_default: float = Field(0.0, alias="TAX_PERCENT_DEFAULT")
+    redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
+    environment: str = Field("development", alias="ENVIRONMENT")
 
     class Config:
         env_file = ".env"

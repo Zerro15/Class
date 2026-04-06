@@ -201,3 +201,35 @@ export const api = {
     });
   },
 };
+
+// Уведомления
+export const notifications = {
+  list() {
+    return request<Notification[]>("/api/v1/notifications");
+  },
+
+  create(payload: CreateNotificationRequest) {
+    return request<Notification>("/api/v1/notifications", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  update(id: number, payload: UpdateNotificationRequest) {
+    return request<Notification>(`/api/v1/notifications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  scheduleReminder(lessonId: number, payload: ScheduleReminderRequest = {}) {
+    const params = new URLSearchParams();
+    if (payload.reminder_type) params.set("reminder_type", payload.reminder_type);
+    if (payload.delay_hours) params.set("delay_hours", String(payload.delay_hours));
+
+    return request<{ status: string; lesson_id: number; delay_hours: number }>(
+      `/api/v1/notifications/${lessonId}/schedule-reminder${params.toString() ? `?${params.toString()}` : ""}`,
+      { method: "POST" }
+    );
+  },
+};

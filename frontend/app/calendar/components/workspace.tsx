@@ -1,11 +1,15 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { DndContext, type DragEndEvent, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 
 import { ChevronLeft, ChevronRight, Menu, Plus, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { LessonItem } from "@/lib/api";
+import { DraggableLesson } from "./DraggableLesson";
+import { DropZone } from "./DropZone";
 import {
   CalendarViewMode,
   MIN_EVENT_HEIGHT_PX,
@@ -292,6 +296,7 @@ export function WeeklyTimeGrid({
   endMinute,
   onCreate,
   onOpenLesson,
+  onMoveLesson,
 }: {
   days: Date[];
   lessonsByDay: Map<string, WeeklyGridLesson[]>;
@@ -300,7 +305,39 @@ export function WeeklyTimeGrid({
   endMinute: number;
   onCreate: (day: Date, minute: number) => void;
   onOpenLesson: (lesson: WeeklyGridLesson) => void;
+  onMoveLesson?: (lesson: WeeklyGridLesson, newDay: Date, newMinute: number) => void;
 }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || !onMoveLesson) return;
+
+    const activeData = active.data.current;
+    const overData = over.data.current;
+
+    if (activeData?.type === 'lesson' && overData?.type === 'time-slot') {
+      const lesson = activeData.lesson as WeeklyGridLesson;
+      const newDay = overData.day as Date;
+      const newMinute = overData.minute as number;
+
+      // Calculate new start time
+      const newDateTime = new Date(newDay);
+      newDateTime.setHours(Math.floor(newMinute / 60), newMinute % 60, 0, 0);
+
+      onMoveLesson(lesson, newDay, newMinute);
+    }
+  };
   const slots = Array.from({ length: Math.ceil((endMinute - startMinute) / TIME_SLOT_MINUTES) + 1 }).map((_, index) => startMinute + index * TIME_SLOT_MINUTES);
   const pixelsPerMinute = PIXELS_PER_HOUR / 60;
   const gridHeight = Math.max((endMinute - startMinute) * pixelsPerMinute, 420);
@@ -310,8 +347,13 @@ export function WeeklyTimeGrid({
   const nowOffset = (nowMinute - startMinute) * pixelsPerMinute;
 
   return (
-    <div className="h-[calc(100vh-220px)] overflow-auto rounded-lg border">
-      <div className={`grid min-w-[860px] grid-cols-[72px_repeat(${days.length},minmax(0,1fr))]`}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="h-[calc(100vh-220px)] overflow-auto rounded-lg border">
+        <div className={`grid min-w-[860px] grid-cols-[72px_repeat(${days.length},minmax(0,1fr))]`}>
         <div className="sticky left-0 top-0 z-40 border-b border-r bg-white" />
         {days.map((day) => {
           const isToday = day.toDateString() === now.toDateString();
