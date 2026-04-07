@@ -72,10 +72,19 @@ def create_notification(
     db.commit()
     db.refresh(notification)
 
-    # Отправляем уведомление в фоне
-    _send_notification_async.delay(
+    # Для email-уведомлений нужен контакт (в текущей модели используем name как fallback для SMS/push)
+    contact_info = None
+    if payload.sent_via == "email":
+        # У студента пока нет email поля, используем placeholder
+        contact_info = f"student_{student.id}@example.com"
+    else:
+        # Для SMS/push используем имя студента как контакт
+        contact_info = student.name
+
+    # Отправляем уведомление синхронно (так как _send_notification_async не Celery task)
+    _send_notification_async(
         notification_id=notification.id,
-        student_email=student.email,
+        student_email=contact_info,
         message=payload.message,
         sent_via=payload.sent_via,
     )
@@ -154,15 +163,12 @@ def schedule_lesson_reminder(
     db.add(notification)
     db.commit()
 
-    # Запланируем отправку
-    _send_notification_async.apply_async(
-        kwargs={
-            "notification_id": notification.id,
-            "student_email": contact_info,
-            "message": message,
-            "sent_via": reminder_type,
-        },
-        countdown=delay_hours * 3600,
+    # Отправляем уведомление синхронно (так как _send_notification_async не Celery task)
+    _send_notification_async(
+        notification_id=notification.id,
+        student_email=contact_info,
+        message=message,
+        sent_via=reminder_type,
     )
 
 @router.post("/{lesson_id}/schedule-reminder")
