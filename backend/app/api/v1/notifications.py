@@ -228,4 +228,4 @@ def schedule_lesson_reminder_api(
         sent_via=reminder_type,
     )
 
-    return {"status": "reminder_scheduled", "lesson_id": lesson_id, "delay_hours": delay_hours}
+    return {"status": "reminder_scheduled", "lesson_id": str(lesson_id), "delay_hours": str(delay_hours)}
