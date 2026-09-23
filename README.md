@@ -1,51 +1,82 @@
-# ClassFlow MVP
+# ClassFlow
 
-ClassFlow — MVP помощника для репетиторов: ученики, занятия, статусы, оплата, домашка и дашборд ближайших занятий.
+> MVP-платформа для репетиторов: ученики, занятия, домашние задания и учёт оплат.
 
-## Структура репозитория
+**ClassFlow** помогает собрать повседневную работу репетитора в одном месте: вести учеников, планировать занятия и видеть ближайшие задачи.
+
+## Возможности MVP
+
+- Карточки учеников и расписание занятий
+- Статусы занятий и отметки об оплате
+- Домашние задания
+- Дашборд ближайших занятий
+
+## Стек
+
+| Часть | Технологии |
+| --- | --- |
+| Backend | FastAPI, SQLAlchemy, Alembic |
+| Frontend | Next.js App Router, Tailwind CSS, shadcn/ui |
+| Данные | PostgreSQL |
+| Запуск | Docker Compose |
+
+## Быстрый запуск
+
+Нужен установленный Docker с поддержкой Docker Compose.
+
+```bash
+cp .env.example .env
+docker compose up --build
 ```
-backend/    FastAPI + SQLAlchemy + Alembic
-frontend/   Next.js (App Router) + Tailwind + shadcn/ui
-infra/      инфраструктурные заметки
-docs/       спецификация и краткое API
-```
-
-## Быстрый старт
-
-1. Скопируйте пример переменных окружения:
-   ```bash
-   cp .env.example .env
-   ```
-2. Запустите сервисы:
-   ```bash
-   docker compose up --build
-   ```
 
 После запуска:
-- Backend: http://localhost:8000/docs
-- Frontend: http://localhost:3000
+
+- Frontend: <http://localhost:3000>
+- API и Swagger: <http://localhost:8000/docs>
 
 ## Переменные окружения
-`.env` в корне:
-- `DATABASE_URL` — строка подключения к Postgres
-- `JWT_SECRET` — секрет для JWT
-- `FRONTEND_ORIGIN` — origin фронтенда (CORS)
-- `TAX_PERCENT_DEFAULT` — налог/комиссия по умолчанию
-- `NEXT_PUBLIC_API_URL` — URL backend для фронтенда
 
-## Команды
-Backend (в контейнере `backend`):
-- `pytest` — тесты
-- `ruff check .` — линтер
-- `mypy app` — typecheck
+Заполни значения в `.env` на основе `.env.example`:
+
+| Переменная | Назначение |
+| --- | --- |
+| `DATABASE_URL` | Подключение к PostgreSQL |
+| `JWT_SECRET` | Секрет для JWT |
+| `FRONTEND_ORIGIN` | Адрес frontend для CORS |
+| `TAX_PERCENT_DEFAULT` | Значение налога или комиссии по умолчанию |
+| `NEXT_PUBLIC_API_URL` | Адрес backend для frontend |
+
+## Проверки
+
+Backend-команды выполняются в контейнере `backend`:
+
+```bash
+pytest
+ruff check .
+mypy app
+```
 
 Frontend:
-- `npm run lint`
-- `npm run typecheck`
 
-## Почему так
-- Для MVP токен хранится в `localStorage` (проще и быстрее в реализации). В production можно заменить на httpOnly cookie.
+```bash
+npm run lint
+npm run typecheck
+```
+
+## Структура проекта
+
+```text
+backend/  FastAPI, SQLAlchemy и Alembic
+frontend/ Next.js-интерфейс
+infra/    заметки по инфраструктуре
+docs/     спецификация и описание API
+```
 
 ## Документация
-- [SPEC](docs/SPEC.md)
+
+- [Спецификация](docs/SPEC.md)
 - [API](docs/API.md)
+
+## Статус
+
+Проект находится на стадии MVP. Для простоты токен авторизации сейчас хранится в `localStorage`; перед production-развёртыванием стоит перейти на более безопасную схему хранения, например `httpOnly` cookie.
